@@ -1,15 +1,18 @@
 export default function CourtsLoading() {
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-0">
-      <div className="h-8 w-32 bg-gray-200 dark:bg-gray-800 rounded-lg animate-pulse mb-6" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="flex flex-col gap-6 p-6">
+      <div className="h-8 w-32 animate-pulse rounded-md bg-muted" />
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="border rounded-2xl overflow-hidden bg-white dark:bg-gray-900">
-            <div className="w-full h-40 bg-gray-200 dark:bg-gray-800 animate-pulse" />
-            <div className="p-4 flex flex-col gap-2">
-              <div className="h-4 w-3/4 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
-              <div className="h-3 w-1/2 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
-              <div className="h-3 w-1/4 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+          <div key={i} className="rounded-xl border bg-card overflow-hidden">
+            <div className="h-36 animate-pulse bg-muted" />
+            <div className="p-4 space-y-2">
+              <div className="h-5 w-40 animate-pulse rounded bg-muted" />
+              <div className="h-4 w-28 animate-pulse rounded bg-muted" />
+              <div className="flex gap-2 pt-1">
+                <div className="h-6 w-16 animate-pulse rounded-full bg-muted" />
+                <div className="h-6 w-16 animate-pulse rounded-full bg-muted" />
+              </div>
             </div>
           </div>
         ))}
