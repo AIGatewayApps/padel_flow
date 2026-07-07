@@ -4,14 +4,39 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { eventSchema } from "@/lib/validations";
 
-export async function POST(req: Request) {
-  await requireRole("EVENT_MANAGER", "ADMIN");
+export async function GET() {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  await requireRole("EVENT_MANAGER", "ADMIN");
+
+  const profile = await db.eventManagerProfile.findUnique({ where: { userId } });
+  if (!profile) return NextResponse.json({ events: [] });
+
+  const events = await db.event.findMany({
+    where: { managerId: profile.id },
+    orderBy: { startsAt: "desc" },
+  });
+  return NextResponse.json(events);
+}
+
+export async function POST(req: Request) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  await requireRole("EVENT_MANAGER", "ADMIN");
+
   const parsed = eventSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+
   const profile = await db.eventManagerProfile.findUnique({ where: { userId } });
   if (!profile) return NextResponse.json({ error: "No event manager profile" }, { status: 403 });
-  const event = await db.event.create({ data: { ...parsed.data, managerId: profile.id, startsAt: new Date(parsed.data.startsAt), endsAt: new Date(parsed.data.endsAt) } });
-  return NextResponse.json(event);
+
+  const event = await db.event.create({
+    data: {
+      ...parsed.data,
+      managerId: profile.id,
+      startsAt: new Date(parsed.data.startsAt),
+      endsAt: new Date(parsed.data.endsAt),
+    },
+  });
+  return NextResponse.json(event, { status: 201 });
 }
