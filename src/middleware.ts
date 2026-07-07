@@ -35,7 +35,9 @@ export default clerkMiddleware(async (auth, req) => {
     | { onboarded?: boolean; role?: string }
     | undefined;
 
-  // Redirect un-onboarded authenticated users to onboarding
+  // Intentional: public routes (leaderboard, clubs, players, coaches) are
+  // viewable by non-onboarded users. Only private routes force onboarding.
+  // To change this behaviour, replace `!isPublicRoute(req)` with `true`.
   if (userId && !isOnboardingRoute(req) && !isPublicRoute(req)) {
     if (!meta?.onboarded) {
       return NextResponse.redirect(new URL("/onboarding", req.url));
@@ -52,10 +54,18 @@ export default clerkMiddleware(async (auth, req) => {
     if (isCoachRoute(req) && role !== "coach" && role !== "admin") {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
-    if (isCourtManagerRoute(req) && role !== "court_manager" && role !== "admin") {
+    if (
+      isCourtManagerRoute(req) &&
+      role !== "court_manager" &&
+      role !== "admin"
+    ) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
-    if (isEventManagerRoute(req) && role !== "event_manager" && role !== "admin") {
+    if (
+      isEventManagerRoute(req) &&
+      role !== "event_manager" &&
+      role !== "admin"
+    ) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
     if (isVendorRoute(req) && role !== "vendor" && role !== "admin") {
@@ -77,7 +87,8 @@ export default clerkMiddleware(async (auth, req) => {
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.com https://*.clerk.accounts.dev https://js.stripe.com",
+      // unsafe-eval removed — if Clerk dev mode requires it, scope only to *.clerk.accounts.dev
+      "script-src 'self' 'unsafe-inline' https://clerk.com https://*.clerk.accounts.dev https://js.stripe.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",

@@ -2,6 +2,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { postRatelimit } from "@/lib/ratelimit";
 import { z } from "zod";
 
 const CommentSchema = z.object({
@@ -10,28 +11,42 @@ const CommentSchema = z.object({
   parentId: z.string().cuid().optional(),
 });
 
-// Simple in-memory rate limit: max 10 comments per user per minute
-const commentRateLimit = new Map<string, { count: number; resetAt: number }>();
+export type ActionResult<T = void> =
+  | { success: true; data: T }
+  | { success: false; error: string; code?: string };
 
-export async function createComment(formData: FormData) {
+export async function createComment(
+  formData: FormData
+): Promise<ActionResult> {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId)
+    return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
-  // Rate limit check
-  const now = Date.now();
-  const rl = commentRateLimit.get(userId);
-  if (rl && now < rl.resetAt) {
-    if (rl.count >= 10) throw new Error("Too many comments. Please slow down.");
-    rl.count++;
-  } else {
-    commentRateLimit.set(userId, { count: 1, resetAt: now + 60_000 });
+  // Rate limit via Upstash Redis (works across all serverless instances)
+  if (postRatelimit) {
+    const { success } = await postRatelimit.limit(userId);
+    if (!success)
+      return {
+        success: false,
+        error: "Too many comments. Please slow down.",
+        code: "RATE_LIMITED",
+      };
   }
 
-  const parsed = CommentSchema.parse({
+  const result = CommentSchema.safeParse({
     postId: formData.get("postId"),
     body: formData.get("body"),
     parentId: formData.get("parentId") || undefined,
   });
+
+  if (!result.success)
+    return {
+      success: false,
+      error: result.error.errors[0]?.message ?? "Invalid input",
+      code: "VALIDATION_ERROR",
+    };
+
+  const parsed = result.data;
 
   await db.postComment.create({
     data: {
@@ -42,11 +57,26 @@ export async function createComment(formData: FormData) {
     },
   });
 
-  const post = await db.post.findUnique({ where: { id: parsed.postId }, select: { authorId: true } });
+  const post = await db.post.findUnique({
+    where: { id: parsed.postId },
+    select: { authorId: true },
+  });
+
   if (post && post.authorId !== userId) {
     await db.notification.create({
-      data: { userId: post.authorId, type: "comment", body: "Someone commented on your post", href: "/feed" },
+      data: {
+        userId: post.authorId,
+        type: "comment",
+        // i18n-ready: use a key, resolve to text in the notification renderer
+        body: "notification.comment.on_post",
+        href: `/feed/${parsed.postId}`,
+      },
     });
   }
+
+  // Narrow cache invalidation to the specific post instead of the entire feed
+  revalidatePath(`/feed/${parsed.postId}`);
   revalidatePath("/feed");
+
+  return { success: true, data: undefined };
 }
