@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { PadelFlowLogo } from "@/components/padel-flow-logo";
 
 export default async function HomePage() {
   const { userId } = await auth();
@@ -12,11 +13,7 @@ export default async function HomePage() {
       <header className="fixed inset-x-0 top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-bg)]/80 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="PadelFlow logo" className="text-[var(--color-primary)]">
-              <circle cx="14" cy="14" r="12" stroke="currentColor" strokeWidth="2.5"/>
-              <path d="M8 14 Q14 8 20 14 Q14 20 8 14Z" fill="currentColor" opacity="0.9"/>
-              <circle cx="14" cy="14" r="2.5" fill="white"/>
-            </svg>
+            <PadelFlowLogo size={28} />
             <span className="font-bold tracking-tight text-[var(--color-text)]">PadelFlow</span>
           </div>
           <nav className="hidden gap-6 text-sm text-[var(--color-text-muted)] sm:flex">
@@ -116,11 +113,7 @@ export default async function HomePage() {
       <footer className="border-t border-[var(--color-border)] py-8 px-4">
         <div className="mx-auto max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[var(--color-text-muted)]">
           <div className="flex items-center gap-2">
-            <svg width="20" height="20" viewBox="0 0 28 28" fill="none" className="text-[var(--color-primary)]">
-              <circle cx="14" cy="14" r="12" stroke="currentColor" strokeWidth="2.5"/>
-              <path d="M8 14 Q14 8 20 14 Q14 20 8 14Z" fill="currentColor" opacity="0.9"/>
-              <circle cx="14" cy="14" r="2.5" fill="white"/>
-            </svg>
+            <PadelFlowLogo size={20} />
             <span className="font-semibold text-[var(--color-text)]">PadelFlow</span>
           </div>
           <p>© 2026 PadelFlow. All rights reserved.</p>

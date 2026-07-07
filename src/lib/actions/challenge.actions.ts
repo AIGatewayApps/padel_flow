@@ -4,15 +4,12 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { challengeRatelimit } from "@/lib/ratelimit";
 import { z } from "zod";
+import type { ActionResult } from "@/lib/types";
 
 const ChallengeSchema = z.object({
   challengedId: z.string().cuid(),
   message: z.string().max(200).optional(),
 });
-
-export type ActionResult<T = void> =
-  | { success: true; data: T }
-  | { success: false; error: string; code?: string };
 
 export async function sendChallenge(
   formData: FormData
@@ -21,7 +18,6 @@ export async function sendChallenge(
   if (!userId)
     return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
-  // Rate limit challenges
   if (challengeRatelimit) {
     const { success } = await challengeRatelimit.limit(userId);
     if (!success)
@@ -65,7 +61,6 @@ export async function sendChallenge(
     data: {
       userId: parsed.challengedId,
       type: "challenge",
-      // i18n-ready: resolve key in notification renderer
       body: "notification.challenge.received",
       href: "/challenges",
     },
@@ -93,7 +88,6 @@ export async function respondToChallenge(
   if (challenge.challengedId !== userId)
     return { success: false, error: "Forbidden", code: "FORBIDDEN" };
 
-  // Guard against double-resolve
   if (challenge.status !== "PENDING")
     return {
       success: false,

@@ -4,16 +4,13 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { postRatelimit } from "@/lib/ratelimit";
 import { z } from "zod";
+import type { ActionResult } from "@/lib/types";
 
 const CommentSchema = z.object({
   postId: z.string().cuid(),
   body: z.string().min(1).max(500),
   parentId: z.string().cuid().optional(),
 });
-
-export type ActionResult<T = void> =
-  | { success: true; data: T }
-  | { success: false; error: string; code?: string };
 
 export async function createComment(
   formData: FormData
@@ -22,7 +19,6 @@ export async function createComment(
   if (!userId)
     return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
-  // Rate limit via Upstash Redis (works across all serverless instances)
   if (postRatelimit) {
     const { success } = await postRatelimit.limit(userId);
     if (!success)
@@ -67,14 +63,12 @@ export async function createComment(
       data: {
         userId: post.authorId,
         type: "comment",
-        // i18n-ready: use a key, resolve to text in the notification renderer
         body: "notification.comment.on_post",
         href: `/feed/${parsed.postId}`,
       },
     });
   }
 
-  // Narrow cache invalidation to the specific post instead of the entire feed
   revalidatePath(`/feed/${parsed.postId}`);
   revalidatePath("/feed");
 

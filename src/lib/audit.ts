@@ -8,7 +8,10 @@ export async function auditLog(
   targetId: string,
   meta?: Record<string, unknown>
 ) {
-  await db.auditLog.create({
-    data: { actorId, action, targetType, targetId, meta: meta ?? {} },
-  });
+  // Fire-and-forget: audit failures must never crash the calling action
+  await db.auditLog
+    .create({
+      data: { actorId, action, targetType, targetId, meta: meta ?? {} },
+    })
+    .catch((err) => console.error("[auditLog] failed to write:", err));
 }

@@ -7,5 +7,7 @@ export async function markAllNotificationsRead() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
   await db.notification.updateMany({ where: { userId, read: false }, data: { read: true } });
+  // Revalidate both the notifications page and the layout-level unread badge
   revalidatePath("/notifications");
+  revalidatePath("/", "layout");
 }

@@ -2,30 +2,20 @@
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { z } from "zod";
-
-const PostSchema = z.object({
-  body: z.string().min(1).max(1000),
-  imageUrl: z.string().url().optional(),
-});
-
-// Rate limit: max 5 posts per user per minute
-const postRateLimit = new Map<string, { count: number; resetAt: number }>();
+import { postRatelimit } from "@/lib/ratelimit";
+import { postSchema } from "@/lib/validations";
 
 export async function createPost(formData: FormData) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const now = Date.now();
-  const rl = postRateLimit.get(userId);
-  if (rl && now < rl.resetAt) {
-    if (rl.count >= 5) throw new Error("Too many posts. Please slow down.");
-    rl.count++;
-  } else {
-    postRateLimit.set(userId, { count: 1, resetAt: now + 60_000 });
+  // Rate limit via Upstash Redis — works across all serverless instances
+  if (postRatelimit) {
+    const { success } = await postRatelimit.limit(userId);
+    if (!success) throw new Error("Too many posts. Please slow down.");
   }
 
-  const parsed = PostSchema.parse({
+  const parsed = postSchema.parse({
     body: formData.get("body"),
     imageUrl: formData.get("imageUrl") || undefined,
   });
