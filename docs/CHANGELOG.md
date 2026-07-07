@@ -1,5 +1,26 @@
 # PadelFlow Changelog
 
+## [0.7.1] - 2026-07-07
+
+### Fixed (High Priority 🔴)
+- **`score.actions.ts`** — All DB writes (score create, playerProfile upsert, user update) are now wrapped in a single `db.$transaction([])`. Redundant second `findUnique` for streak removed. User now fetched once using `clerkId` key instead of `id`.
+- **`onboarding.actions.ts`** — `where: { id: userId }` corrected to `where: { clerkId: userId }` — onboarding was silently failing for every user. Per-role Zod schemas added (`PlayerSchema`, `CoachSchema`, `CourtManagerSchema`, `EventManagerSchema`) replacing unsafe raw `parseFloat` calls.
+- **`court.actions.ts`** — `requireRole` was called with two role strings and no `clerkId`. Fixed to `requireRole(userId, "ORG_ADMIN")` matching the actual function signature.
+- **`post.actions.ts`** — In-memory `Map`-based rate limiter replaced with `postRatelimit` (Upstash Redis). The old implementation was ineffective on Vercel serverless since each invocation may run in a fresh instance. Duplicate inline `PostSchema` removed; now imports shared `postSchema` from `validations.ts`.
+
+### Fixed (Medium Priority 🟡)
+- **`audit.ts`** — Added `.catch()` so audit write failures log to console but never crash the calling action.
+- **`page.tsx`** — Duplicate inline SVG logo extracted to shared `src/components/padel-flow-logo.tsx` component. Both header and footer now import `<PadelFlowLogo>`.
+- **`onboarding.actions.ts`** — Per-role Zod schemas with `z.coerce.number()` prevent `NaN` being written to the DB when numeric fields are missing.
+- **`post.actions.ts`** / **`validations.ts`** — Duplicate `PostSchema` definition removed from `post.actions.ts`; single source of truth in `validations.ts`.
+
+### Fixed (Minor 🟢)
+- **`src/lib/types.ts`** — New shared file. `ActionResult<T>` type moved here; removed duplicate definitions from `challenge.actions.ts` and `comment.actions.ts`.
+- **`elo.ts`** — Added `Math.max(100, ...)` floor to prevent Elo ratings going negative after a loss streak.
+- **`notification.actions.ts`** — Added `revalidatePath("/", "layout")` so the unread notification badge in the nav updates immediately after marking all read.
+
+---
+
 ## [0.7.0] - 2026-07-07
 
 ### Added
