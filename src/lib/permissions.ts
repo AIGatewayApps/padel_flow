@@ -3,17 +3,30 @@ import { redirect } from 'next/navigation'
 
 type Role = 'PLAYER' | 'COACH' | 'ORG_ADMIN' | 'VENDOR' | 'SUPER_ADMIN'
 
+/** Platform-level guard — only SUPER_ADMIN may proceed. All other roles redirected. */
+export async function requireSuperAdmin(clerkId: string) {
+  const user = await prisma.user.findUnique({ where: { clerkId } })
+  if (!user || user.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  return user
+}
+
+/** Single role guard (use sparingly — prefer requireOrgRole for org-scoped resources). */
 export async function requireRole(clerkId: string, role: Role) {
   const user = await prisma.user.findUnique({ where: { clerkId } })
   if (!user || user.role !== role) redirect('/dashboard')
   return user
 }
 
+/**
+ * Org-scoped role guard.
+ * SUPER_ADMIN always passes. Everyone else must hold one of the given roles
+ * as an OrgMember of the specified org.
+ */
 export async function requireOrgRole(clerkId: string, orgId: string, roles: Role[]) {
   const user = await prisma.user.findUnique({ where: { clerkId } })
   if (!user) redirect('/sign-in')
 
-  // Super admin bypasses org role check
+  // Platform admin bypasses all org role checks
   if (user.role === 'SUPER_ADMIN') return user
 
   const membership = await prisma.orgMember.findUnique({

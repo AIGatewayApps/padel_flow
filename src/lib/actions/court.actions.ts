@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/permissions";
+import { requireOrgRole } from "@/lib/permissions";
 import { courtSchema } from "@/lib/validations";
 import { z } from "zod";
 
@@ -12,11 +12,12 @@ const SlotSchema = z.object({
   endsAt: z.string().datetime(),
 });
 
-export async function upsertCourt(courtId: string | null, formData: FormData) {
+export async function upsertCourt(orgId: string, courtId: string | null, formData: FormData) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  await requireRole(userId, "ORG_ADMIN");
+  // Only ORG_ADMIN members of this org (or SUPER_ADMIN) may manage courts
+  await requireOrgRole(userId, orgId, ["ORG_ADMIN"]);
 
   const raw = {
     name: formData.get("name"),
@@ -29,30 +30,27 @@ export async function upsertCourt(courtId: string | null, formData: FormData) {
     indoor: formData.has("indoor"),
   };
   const parsed = courtSchema.parse(raw);
-  const profile = await db.courtManagerProfile.findUnique({ where: { userId } });
-  if (!profile) throw new Error("No court manager profile");
 
   if (courtId) {
     const court = await db.court.findUnique({ where: { id: courtId } });
-    if (!court || court.managerId !== profile.id) throw new Error("Forbidden");
+    if (!court || court.orgId !== orgId) throw new Error("Forbidden");
     await db.court.update({ where: { id: courtId }, data: parsed });
   } else {
-    await db.court.create({ data: { ...parsed, managerId: profile.id } });
+    await db.court.create({ data: { ...parsed, orgId } });
   }
 
-  revalidatePath("/manage/courts");
-  redirect("/manage/courts");
+  revalidatePath(`/orgs/${orgId}/courts`);
+  redirect(`/orgs/${orgId}/courts`);
 }
 
-export async function addCourtSlot(courtId: string, formData: FormData) {
+export async function addCourtSlot(orgId: string, courtId: string, formData: FormData) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  await requireRole(userId, "ORG_ADMIN");
+  await requireOrgRole(userId, orgId, ["ORG_ADMIN"]);
 
-  const profile = await db.courtManagerProfile.findUnique({ where: { userId } });
   const court = await db.court.findUnique({ where: { id: courtId } });
-  if (!court || court.managerId !== profile?.id) throw new Error("Forbidden");
+  if (!court || court.orgId !== orgId) throw new Error("Forbidden");
 
   const { startsAt, endsAt } = SlotSchema.parse({
     startsAt: formData.get("startsAt"),
@@ -63,5 +61,5 @@ export async function addCourtSlot(courtId: string, formData: FormData) {
     data: { courtId, startsAt: new Date(startsAt), endsAt: new Date(endsAt) },
   });
 
-  revalidatePath(`/manage/courts/${courtId}`);
+  revalidatePath(`/orgs/${orgId}/courts/${courtId}`);
 }
