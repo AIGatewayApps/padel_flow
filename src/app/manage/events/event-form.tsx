@@ -4,8 +4,8 @@ type Event = { id: string; title: string; description: string | null; location: 
 
 const fmt = (d: Date) => new Date(d).toISOString().slice(0, 16);
 
-export default function EventForm({ event }: { event?: Event }) {
-  const action = upsertEvent.bind(null, event?.id ?? null);
+export default function EventForm({ orgId, event }: { orgId: string; event?: Event }) {
+  const action = upsertEvent.bind(null, orgId, event?.id ?? null);
   return (
     <form action={action} className="flex flex-col gap-4">
       <input name="title" required defaultValue={event?.title} placeholder="Event title"

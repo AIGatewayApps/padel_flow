@@ -2,8 +2,8 @@ import { upsertCourt } from "@/lib/actions/court.actions";
 
 type Court = { id: string; name: string; description: string | null; address: string; city: string; country: string; pricePerHour: number; surface: string | null; indoor: boolean };
 
-export default function CourtForm({ court }: { court?: Court }) {
-  const action = upsertCourt.bind(null, court?.id ?? null);
+export default function CourtForm({ orgId, court }: { orgId: string; court?: Court }) {
+  const action = upsertCourt.bind(null, orgId, court?.id ?? null);
   return (
     <form action={action} className="flex flex-col gap-4">
       <input name="name" required defaultValue={court?.name} placeholder="Court name"
