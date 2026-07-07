@@ -1,5 +1,26 @@
 # PadelFlow Changelog
 
+## [0.7.2] - 2026-07-07
+
+### Fixed (High Priority 🔴)
+- **`court-form.tsx`** — Added `orgId` prop; `upsertCourt.bind(null, orgId, courtId)` now correctly passes org scope to the server action.
+- **`event-form.tsx`** — Added `orgId` prop; `upsertEvent.bind(null, orgId, eventId)` now correctly passes org scope to the server action.
+- **`manage/courts/page.tsx`** — Replaced broken `requireRole("COURT_MANAGER", "ADMIN")` (wrong import, wrong signature) with `auth()` + `db.orgMember.findFirst` + `requireOrgRole(userId, orgId, ["ORG_ADMIN"])`. Courts fetched directly by `orgId` — no longer depends on removed `CourtManagerProfile`.
+- **`manage/courts/new/page.tsx`** — Same guard fix; passes resolved `orgId` to `<CourtForm>`.
+- **`manage/courts/[id]/page.tsx`** — Same guard fix; validates `court.orgId === membership.orgId` before rendering. Passes `orgId` to `<CourtForm>` and `<SlotManager>`.
+- **`manage/events/page.tsx`** — Replaced broken `requireRole("EVENT_MANAGER", "ADMIN")` with org-scoped guard; events fetched by `orgId`.
+- **`manage/events/new/page.tsx`** — Same guard fix; passes resolved `orgId` to `<EventForm>`.
+- **`manage/events/[id]/page.tsx`** — Same guard fix; validates `event.orgId === membership.orgId` before rendering.
+
+### Changed
+- **Role contract enforced end-to-end**:
+  - `ORG_ADMIN` — manages courts + events **for their org only** (scoped via `requireOrgRole`)
+  - `SUPER_ADMIN` — platform-wide access, bypasses all org checks (via `requireSuperAdmin`)
+  - All old `requireRole("COURT_MANAGER" | "EVENT_MANAGER" | "ADMIN")` calls removed from `/manage` routes
+- **`court.actions.ts`** / **`event.actions.ts`** — `orgId` is first param; ownership verified via `court.orgId !== orgId` / `event.orgId !== orgId` before any mutation.
+
+---
+
 ## [0.7.1] - 2026-07-07
 
 ### Fixed (High Priority 🔴)
