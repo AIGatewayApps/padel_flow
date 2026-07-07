@@ -15,19 +15,20 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, slotsCreated: 0 });
   }
 
-  // Compute all candidate next-week datetimes upfront
-  const candidates = recurringSlots.map(slot => {
+  // Compute next occurrence: WEEKLY = +7 days, BIWEEKLY = +14 days
+  const candidates = recurringSlots.map((slot) => {
+    const daysToAdd = slot.recurrence === "BIWEEKLY" ? 14 : 7;
     const newStart = new Date(slot.startsAt);
-    newStart.setDate(newStart.getDate() + 7);
+    newStart.setDate(newStart.getDate() + daysToAdd);
     const newEnd = new Date(slot.endsAt);
-    newEnd.setDate(newEnd.getDate() + 7);
+    newEnd.setDate(newEnd.getDate() + daysToAdd);
     return { slot, newStart, newEnd };
   });
 
   // Batch-check which slots already exist
   const existingSlots = await db.courtSlot.findMany({
     where: {
-      OR: candidates.map(c => ({
+      OR: candidates.map((c) => ({
         courtId: c.slot.courtId,
         startsAt: c.newStart,
       })),
@@ -36,16 +37,16 @@ export async function GET(req: Request) {
   });
 
   const existingKeys = new Set(
-    existingSlots.map(s => `${s.courtId}::${s.startsAt.toISOString()}`)
+    existingSlots.map((s) => `${s.courtId}::${s.startsAt.toISOString()}`)
   );
 
   const toCreate = candidates.filter(
-    c => !existingKeys.has(`${c.slot.courtId}::${c.newStart.toISOString()}`)
+    (c) => !existingKeys.has(`${c.slot.courtId}::${c.newStart.toISOString()}`)
   );
 
   if (toCreate.length > 0) {
     await db.courtSlot.createMany({
-      data: toCreate.map(c => ({
+      data: toCreate.map((c) => ({
         courtId: c.slot.courtId,
         startsAt: c.newStart,
         endsAt: c.newEnd,
