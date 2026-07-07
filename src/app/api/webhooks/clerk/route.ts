@@ -1,29 +1,69 @@
-import { Webhook } from "svix";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import type { Role } from "@prisma/client";
 
 export async function POST(req: Request) {
-  const body = await req.text();
-  const headersList = await headers();
-  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!);
+  const payload = await req.json();
+  const evt = payload;
 
-  let evt: { type: string; data: Record<string, unknown> };
-  try {
-    evt = wh.verify(body, {
-      "svix-id": headersList.get("svix-id") ?? "",
-      "svix-timestamp": headersList.get("svix-timestamp") ?? "",
-      "svix-signature": headersList.get("svix-signature") ?? "",
-    }) as typeof evt;
-  } catch {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  switch (evt.type) {
+    case "user.created":
+    case "user.updated": {
+      const clerkUser = evt.data;
+      const email = clerkUser.email_addresses?.[0]?.email_address ?? "";
+      const role = (clerkUser.public_metadata?.role ?? "PLAYER");
+      const subData = clerkUser.private_metadata as { pro?: boolean };
+      const isPro = subData?.pro === true;
+
+      await db.user.upsert({
+        where: { id: clerkUser.id },
+        update: {
+          email,
+          displayName: `${clerkUser.first_name ?? ""} ${clerkUser.last_name ?? ""}`.trim() || clerkUser.username ?? "Player",
+          avatarUrl: clerkUser.image_url ?? undefined,
+          role: role as string,
+          subscription: isPro ? "PRO" : "FREE",
+        },
+        create: {
+          id: clerkUser.id,
+          email,
+          username: clerkUser.username ?? clerkUser.id.slice(0, 16),
+          displayName: `${clerkUser.first_name ?? ""} ${clerkUser.last_name ?? ""}`.trim() || clerkUser.username ?? "Player",
+          avatarUrl: clerkUser.image_url ?? undefined,
+          role: role as string,
+          subscription: isPro ? "PRO" : "FREE",
+          settings: { create: {} },
+        },
+      });
+      break;
+    }
+    case "user.deleted": {
+      if (evt.data.id) {
+        await db.user.delete({ where: { id: evt.data.id } }).catch(() => null);
+      }
+      break;
+    }
+    case "subscription.created":
+    case "subscription.updated": {
+      const subData = evt.data;
+      const clerkUserId = subData.user_id;
+      if (!clerkUserId) break;
+      const status = subData.status;
+      const isPro = status === "active" || status === "trialing";
+      await db.user.update({
+        where: { id: clerkUserId },
+        data: { subscription: isPro ? "PRO" : "FREE" },
+      });
+      break;
+    }
+    case "subscription.deleted": {
+      const clerkUserId = evt.data.user_id;
+      if (!clerkUserId) break;
+      await db.user.update({
+        where: { id: clerkUserId },
+        data: { subscription: "FREE" },
+      });
+      break;
+    }
   }
-
-  if (evt.type === "user.deleted") {
-    const id = evt.data.id as string;
-    await db.user.deleteMany({ where: { id } });
-  }
-
   return NextResponse.json({ ok: true });
 }

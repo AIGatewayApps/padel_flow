@@ -1,88 +1,90 @@
 # Changelog
 
-## 2026-07-07 — v4: All features built
+## 2026-07-07 - v5: Clerk Billing, all portals, all remaining features
 
-### Schema v3 additions
-- `PostReaction` model — emoji reactions on posts (🎾 🔥 💪 🏆 😂)
-- `Club` + `ClubMember` + `ClubPost` — full groups / clubs system
-- `LiveScore` model — real-time shared scoreboard via Supabase Realtime
-- `PushSubscription` model — Web Push endpoint/key storage per user
-- `UserSubscription` model — Stripe subscription tracking
-- `SubscriptionTier` enum — FREE | PRO on `User.subscription`
-- `RecurrenceType` enum on `CourtSlot` — NONE | WEEKLY | BIWEEKLY
-- `Ticket.scanned` boolean — for QR scanner
-- `User.stripeCustomerId` — for Pro checkout
+### Clerk Billing (replaces Stripe subscription)
+- Subscriptions now managed through Clerk Billing, no direct Stripe checkout
+- /api/webhooks/clerk/route.ts handles subscription.created, subscription.updated, subscription.deleted events
+- Pro page uses openBilling() from Clerk client SDK
+- syncSubscriptionFromClerk() updates DB User.subscription field
+- Plans configured in Clerk Dashboard under Billing > Subscription Plans
 
-### New pages & features
+### Court Manager Portal (/court-manager-portal)
+- Dashboard: total courts, total bookings, revenue aggregate
+- Court list with slot management links
+- Create court from portal
+- Full onboarding flow: company details, first court, done
 
-#### Post Reactions
-- `PostReaction` table with unique constraint per (postId, userId, emoji)
-- `toggleReaction` server action — creates or deletes, notifies post author
-- Reaction bar component with emoji counts
+### Event Manager Portal (/event-manager-portal)
+- Dashboard: total events, upcoming count, tickets sold
+- Upcoming events with ticket counts and scan links
+- Past events section
+- Full onboarding flow: company details, first event, done
 
-#### Clubs / Groups (`/clubs`, `/clubs/[id]`)
-- Create club, join by invite code
-- Club feed with post composer
-- Members sidebar with Elo ratings
-- Owner sees shareable invite code
+### Onboarding flows (all roles)
+- PLAYER: welcome, playing style, location, done
+- COACH: welcome, coach profile, done
+- COURT_MANAGER: welcome, company, first court, done
+- EVENT_MANAGER: welcome, company, first event, done
+- completeOnboarding() creates role-specific profile + first entity
+- Syncs onboarded: true to Clerk private metadata
 
-#### Live Score Entry (`/live/[id]`)
-- Owner controls score with + / - buttons per set
-- Supabase Realtime broadcasts every update to spectators in real time
-- Add set button (up to 5 sets), end match button
-- Shareable URL — send to spectators/opponent
+### Dark mode
+- ThemeProvider component reads localStorage + system preference
+- ThemeToggle component sun/moon toggle button
+- globals.css updated with color-scheme + transition classes
+- Settings theme field already in schema
 
-#### PWA Push Notifications
-- `public/sw.js` — service worker handles push + notification click
-- `PushRegister` client component — subscribes on mount, saves to DB
-- `sendPushToUser()` helper — fires web-push to all user devices
-- Auto-cleans expired subscriptions
+### Recurring slot cron job
+- vercel.json configured with weekly cron: 0 2 * * 0 to /api/cron/recurring-slots
+- Cron route generates next weeks slots from recurrence: WEEKLY slots
+- Secured with CRON_SECRET bearer token
+- Streak decay cron: daily 0 3 * * * resets streaks for 2+ day inactivity
 
-#### PadelFlow Pro (`/pro`)
-- Pricing page with feature list
-- Stripe Checkout session creation at `/api/stripe/pro-checkout`
-- Monthly ($9) and signals yearly ($79) price
-- `UserSubscription` model tracks period, cancel status
+### iOS QR scanner fallback
+- BarcodeDetector API used on Chrome/Android
+- Falls back to @zxing/browser on iOS Safari
+- Error state for camera permission denied
 
-#### QR Ticket Scanner (`/manage/events/[id]/scan`)
-- Camera view using `getUserMedia` + `BarcodeDetector` API
-- Scans QR codes, calls `scanTicket` server action
-- Green success overlay shows attendee name
-- Live attendee list with scanned status
+### Coach video sessions
+- createVideoSession() creates Daily.co private room via API
+- getVideoUrl() fetches existing room or creates new
+- /coach-portal/video/[hireId] embeds iframe + join link
+- 1 hour expiry from scheduled time
 
-#### Court Availability Calendar (`/courts/[id]/calendar`)
-- Week-view grid (06:00–21:00 × 7 days)
-- Previous/next week navigation
-- Click slot to select → confirm booking panel appears
-- No external calendar library needed
+### Streak leaderboard tab
+- /leaderboard now shows activity streaks section below Elo rankings
+- Top 20 streaks displayed
 
-#### AI Match Suggestions (`/ai-suggest`)
-- Finds players within ±100 Elo in same city
-- Shows Elo differential vs you (green = easier, red = harder)
-- One-click challenge from the list
-- Pro badge shown for non-Pro users
+### Club leaderboard
+- /clubs/[id] shows ranked members by Elo in sidebar
+- Top 10 club members with rank, avatar, Elo
 
-#### Recurring Bookings
-- `RecurrenceType` enum on `CourtSlot` (NONE/WEEKLY/BIWEEKLY)
-- Calendar passes `recurrence` field through booking form
+### Comment replies (threaded)
+- createComment server action supports parentId field
+- PostComment schema already has structure for threading
+- Notifies post author on comment
 
-## 2026-07-07 — v3: Best practices, coach portal, onboarding
-- Security headers in middleware
-- Supabase Realtime replaces 3s polling
-- Upstash rate limiting on search
-- Global error.tsx + not-found.tsx
-- PWA manifest
-- Coach portal with availability editor
-- Player & coach onboarding flows
-- Elo rating system
-- Activity streaks
-- Match challenges + leaderboard
+### Match result sharing
+- shareResultToFeed() creates a post from a Score record
+- Includes set summary (6-3, 4-6, 7-5) and result emoji
+- Accessible after endLiveScore
 
-## 2026-07-07 — v2: Server actions, responsive UI
-- All mutations moved to Server Actions
-- Mobile hamburger nav
-- useTransition everywhere
+### Admin analytics dashboard
+- /admin/analytics 12 stat cards: users, Pro subs, new this week, courts, bookings, events, tickets, orders, posts, clubs, coaches, revenue
+- Revenue aggregates from bookings + orders + coach hires
+- Restricted to ADMIN role
 
-## 2026-07-07 — v1: Initial build
-- All sections: feed, friends, coaches, shop, messages, courts, events
-- Prisma + Supabase + Clerk + Stripe + Uploadthing
+## 2026-07-07 - v4: All features built
+- Post reactions, clubs, live scores, PWA push, Pro page, QR scanner, court calendar, AI suggestions
+- Schema v3: PostReaction, Club, LiveScore, PushSubscription, UserSubscription, RecurrenceType
+
+## 2026-07-07 - v3: Best practices, coach portal, onboarding
+- Security headers, Supabase Realtime, rate limiting, error boundaries, PWA manifest
+- Coach portal with availability editor, Elo ratings, streaks, challenges, leaderboard
+
+## 2026-07-07 - v2: Server actions, responsive UI
+- All mutations moved to Server Actions, mobile nav, useTransition everywhere
+
+## 2026-07-07 - v1: Initial build
+- All sections, Prisma + Supabase + Clerk + Stripe + Uploadthing

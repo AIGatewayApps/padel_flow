@@ -25,18 +25,18 @@ export default async function ClubPage({ params }: { params: Promise<{ id: strin
 
   const isMember = club.members.some(m => m.userId === userId);
   const isOwner = club.ownerId === userId;
+  const rankedMembers = [...club.members].sort((a, b) => b.user.eloRating - a.user.eloRating).slice(0, 10);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-0">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
           {club.imageUrl
             ? <Image src={club.imageUrl} alt={club.name} width={64} height={64} className="rounded-2xl object-cover" />
-            : <div className="w-16 h-16 rounded-2xl bg-green-100 flex items-center justify-center text-3xl">🎾</div>}
+            : <div className="w-16 h-16 rounded-2xl bg-green-100 flex items-center justify-center text-3xl">Club</div>}
           <div>
             <h1 className="text-2xl font-bold">{club.name}</h1>
-            <p className="text-gray-500 text-sm">{club._count.members} members{club.city ? ` · ${club.city}` : ""}</p>
+            <p className="text-gray-500 text-sm">{club._count.members} members{club.city ? ` - ${club.city}` : ""}</p>
           </div>
         </div>
         {isOwner && (
@@ -48,7 +48,6 @@ export default async function ClubPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        {/* Feed */}
         <div className="sm:col-span-2 flex flex-col gap-4">
           {isMember && (
             <form action={postToClub.bind(null, id)} className="border rounded-2xl p-4 bg-white dark:bg-gray-900">
@@ -68,20 +67,22 @@ export default async function ClubPage({ params }: { params: Promise<{ id: strin
           ))}
         </div>
 
-        {/* Members sidebar */}
-        <div className="flex flex-col gap-2">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Members</h2>
-          {club.members.map(m => (
-            <Link key={m.id} href={`/players/${m.user.username}`} className="flex items-center gap-3 hover:opacity-80">
-              {m.user.avatarUrl
-                ? <Image src={m.user.avatarUrl} alt={m.user.displayName} width={32} height={32} className="rounded-full" />
-                : <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold">{m.user.displayName[0]}</div>}
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{m.user.displayName}</p>
-                <p className="text-xs text-gray-400">{m.user.eloRating} Elo</p>
-              </div>
-            </Link>
-          ))}
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Club leaderboard</h2>
+            {rankedMembers.map((m, i) => (
+              <Link key={m.id} href={`/players/${m.user.username}`} className="flex items-center gap-3 hover:opacity-80">
+                <span className={`w-5 text-xs font-bold ${ i < 3 ? "text-green-600" : "text-gray-400" }`}>{i + 1}</span>
+                {m.user.avatarUrl
+                  ? <Image src={m.user.avatarUrl} alt={m.user.displayName} width={28} height={28} className="rounded-full" />
+                  : <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold">{m.user.displayName[0]}</div>}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium truncate">{m.user.displayName}</p>
+                </div>
+                <span className="text-xs text-green-600 font-bold">{m.user.eloRating}</span>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
     </div>

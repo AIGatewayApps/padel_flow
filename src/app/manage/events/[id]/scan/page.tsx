@@ -39,7 +39,7 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
           }`}>
             <p className="text-sm font-medium">{t.user.displayName}</p>
             {t.scanned
-              ? <span className="text-xs text-green-600 font-semibold">✓ Scanned</span>
+              ? <span className="text-xs text-green-600 font-semibold">Scanned</span>
               : <span className="text-xs text-gray-400">Not yet</span>}
           </div>
         ))}

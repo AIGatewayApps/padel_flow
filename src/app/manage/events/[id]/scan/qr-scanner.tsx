@@ -9,34 +9,48 @@ export default function QrScanner({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     let stream: MediaStream;
+
     async function start() {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
-      setStatus("scanning");
+
+      if ("BarcodeDetector" in window) {
+        const detector = new (window as unknown as { BarcodeDetector: new (o: object) => { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }).BarcodeDetector({ formats: ["qr_code"] });
+        const interval = setInterval(async () => {
+          if (!videoRef.current || status === "success") return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes.length > 0) {
+              clearInterval(interval);
+              const result = await scanTicket(eventId, codes[0].rawValue);
+              setStatus("success");
+              setMessage(result.name);
+              setTimeout(() => setStatus("scanning"), 2500);
+            }
+          } catch { }
+        }, 500);
+        setStatus("scanning");
+        return () => clearInterval(interval);
+      } else {
+        const { BrowserMultiFormatReader } = await import("@zxing/browser");
+        const reader = new BrowserMultiFormatReader();
+        reader.decodeFromVideoDevice(undefined, videoRef.current!, (result) => {
+          if (result) {
+            const text = (result as { getText: () => string }).getText();
+            scanTicket(eventId, text).then(r => {
+              setStatus("success");
+              setMessage(r.name);
+              setTimeout(() => setStatus("scanning"), 2500);
+            }).catch(() => { });
+          }
+        });
+        setStatus("scanning");
+        return () => { reader.stopAsyncDecode?.(); };
+      }
     }
+
     start().catch(() => setStatus("error"));
     return () => { stream?.getTracks().forEach(t => t.stop()); };
-  }, []);
-
-  // Use BarcodeDetector API (Chrome/Android) or fallback message
-  useEffect(() => {
-    if (!("BarcodeDetector" in window)) return;
-    const detector = new (window as unknown as { BarcodeDetector: new (o: object) => { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }).BarcodeDetector({ formats: ["qr_code"] });
-    const interval = setInterval(async () => {
-      if (!videoRef.current || status === "success") return;
-      try {
-        const codes = await detector.detect(videoRef.current);
-        if (codes.length > 0) {
-          clearInterval(interval);
-          const qrCode = codes[0].rawValue;
-          const result = await scanTicket(eventId, qrCode);
-          setStatus("success");
-          setMessage(result.name);
-          setTimeout(() => setStatus("scanning"), 2500);
-        }
-      } catch { /* ignore */ }
-    }, 500);
-    return () => clearInterval(interval);
   }, [eventId, status]);
 
   return (
@@ -47,14 +61,14 @@ export default function QrScanner({ eventId }: { eventId: string }) {
       </div>
       {status === "success" && (
         <div className="absolute inset-0 bg-green-600/90 flex flex-col items-center justify-center gap-2">
-          <span className="text-5xl">✓</span>
+          <span className="text-5xl">OK</span>
           <p className="text-white font-bold text-lg">{message}</p>
           <p className="text-green-200 text-sm">Ticket valid</p>
         </div>
       )}
-      {!("BarcodeDetector" in (typeof window !== "undefined" ? window : {})) && (
-        <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-xs text-center py-2">
-          BarcodeDetector not supported on this browser — use Chrome on Android
+      {status === "error" && (
+        <div className="absolute inset-0 flex items-center justify-center bg-red-600/90">
+          <p className="text-white text-sm">Camera access denied or unavailable</p>
         </div>
       )}
     </div>

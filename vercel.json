@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/recurring-slots",
+      "schedule": "0 2 * * 0"
+    },
+    {
+      "path": "/api/cron/streak-decay",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}
