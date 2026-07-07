@@ -37,38 +37,37 @@ export default clerkMiddleware(async (auth, req) => {
 
   // Intentional: public routes (leaderboard, clubs, players, coaches) are
   // viewable by non-onboarded users. Only private routes force onboarding.
-  // To change this behaviour, replace `!isPublicRoute(req)` with `true`.
   if (userId && !isOnboardingRoute(req) && !isPublicRoute(req)) {
     if (!meta?.onboarded) {
       return NextResponse.redirect(new URL("/onboarding", req.url));
     }
   }
 
-  // Role-based portal guards
+  // Role-based portal guards — roles match Prisma enum (uppercase)
   if (userId && meta?.onboarded) {
     const role = meta.role;
 
-    if (isAdminRoute(req) && role !== "admin") {
+    if (isAdminRoute(req) && role !== "SUPER_ADMIN") {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
-    if (isCoachRoute(req) && role !== "coach" && role !== "admin") {
+    if (isCoachRoute(req) && role !== "COACH" && role !== "SUPER_ADMIN") {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
     if (
       isCourtManagerRoute(req) &&
-      role !== "court_manager" &&
-      role !== "admin"
+      role !== "ORG_ADMIN" &&
+      role !== "SUPER_ADMIN"
     ) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
     if (
       isEventManagerRoute(req) &&
-      role !== "event_manager" &&
-      role !== "admin"
+      role !== "ORG_ADMIN" &&
+      role !== "SUPER_ADMIN"
     ) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
-    if (isVendorRoute(req) && role !== "vendor" && role !== "admin") {
+    if (isVendorRoute(req) && role !== "VENDOR" && role !== "SUPER_ADMIN") {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
   }
@@ -87,7 +86,6 @@ export default clerkMiddleware(async (auth, req) => {
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      // unsafe-eval removed — if Clerk dev mode requires it, scope only to *.clerk.accounts.dev
       "script-src 'self' 'unsafe-inline' https://clerk.com https://*.clerk.accounts.dev https://js.stripe.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",

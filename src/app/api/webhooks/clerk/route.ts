@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       const isPro = clerkUser.private_metadata?.pro === true;
 
       await db.user.upsert({
-        where: { id: clerkUser.id },
+        where: { clerkId: clerkUser.id },
         update: {
           email,
           displayName: `${clerkUser.first_name ?? ""} ${clerkUser.last_name ?? ""}`.trim() || clerkUser.username ?? "Player",
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
           subscription: isPro ? "PRO" : "FREE",
         },
         create: {
-          id: clerkUser.id,
+          clerkId: clerkUser.id,
           email,
           username: clerkUser.username ?? clerkUser.id.slice(0, 16),
           displayName: `${clerkUser.first_name ?? ""} ${clerkUser.last_name ?? ""}`.trim() || clerkUser.username ?? "Player",
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     case "user.deleted": {
       const d = evt.data as { id?: string };
       if (d.id) {
-        await db.user.delete({ where: { id: d.id } }).catch(() => null);
+        await db.user.delete({ where: { clerkId: d.id } }).catch(() => null);
       }
       break;
     }
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
       if (!subData.user_id) break;
       const isPro = subData.status === "active" || subData.status === "trialing";
       await db.user.update({
-        where: { id: subData.user_id },
+        where: { clerkId: subData.user_id },
         data: { subscription: isPro ? "PRO" : "FREE" },
       });
       break;
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
       const d = evt.data as { user_id?: string };
       if (!d.user_id) break;
       await db.user.update({
-        where: { id: d.user_id },
+        where: { clerkId: d.user_id },
         data: { subscription: "FREE" },
       });
       break;

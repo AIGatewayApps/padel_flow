@@ -1,3 +1,4 @@
+import React from "react";
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Inter } from "next/font/google";
@@ -20,8 +21,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <body className={inter.className}>
           <ThemeProvider>
             {children}
+            <Toaster position="top-center" theme="system" />
           </ThemeProvider>
-          <Toaster position="top-center" theme="system" />
         </body>
       </html>
     </ClerkProvider>

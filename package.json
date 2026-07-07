@@ -16,6 +16,8 @@
     "@clerk/nextjs": "^6",
     "@prisma/client": "^6",
     "@stripe/stripe-js": "^4",
+    "@upstash/ratelimit": "^2",
+    "@upstash/redis": "^1",
     "@uploadthing/react": "^7",
     "next": "15.3.0",
     "pusher": "^5",
