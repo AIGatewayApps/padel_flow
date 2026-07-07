@@ -1,64 +1,62 @@
 # Changelog
 
+## 2026-07-07 — Best practices, all features, coach portal, onboarding
+
+### Architecture fixes
+- **All API routes replaced with Server Actions** — no HTTP round trips for mutations
+- **`useTransition` everywhere** — optimistic UI, no janky loading states
+- **Prisma `select` instead of full `include`** — only fetch fields used in UI
+- **`_count` for like/comment counts** — never load all rows just for a number
+- **Global `error.tsx` + `not-found.tsx`** — proper error boundaries on every page
+- **`next.config.ts` image domains** — Clerk, Uploadthing, Supabase all whitelisted
+- **PWA manifest** — installable on iOS/Android home screen
+- **Security headers** in middleware — X-Frame-Options, nosniff, referrer policy
+
+### Schema updates
+- Added `COACH` role to `Role` enum
+- Added `eloRating`, `streak`, `lastPlayedAt`, `onboarded` to `User`
+- Added `MatchChallenge` model with `ChallengeStatus` enum
+- Added `CoachAvailability` model
+- Added `specialties`, `languages`, `stripeAccountId` to `Coach`
+- Added `notes` to `CoachHire`
+
+### New features
+- **Elo rating system** — `lib/elo.ts`, updated on every score submission
+- **Activity streaks** — consecutive days of play tracked on `User.streak`
+- **Match challenges** — send/accept/decline challenges, notification on receive
+- **Supabase Realtime messages** — replaces 3s polling, instant delivery via `postgres_changes`
+- **Rate limiting** — `/api/players/search` rate-limited via Upstash Redis
+- **Leaderboard** — Elo rankings with podium (🥇🥈🥉), highlights current user
+- **Challenges page** — `/challenges` to view/respond to all challenges
+
+### Onboarding flows
+- `/onboarding` — multi-step flow for players (welcome → playing style → location → done)
+- `/onboarding` — separate flow for coaches (welcome → coach profile → done)
+- Middleware auto-redirects unonboarded users
+- `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/onboarding` in env
+
+### Coach portal (`/coach-portal`)
+- Dashboard with stats: upcoming, pending, completed sessions, total earned
+- Pending booking requests with accept/decline
+- Upcoming sessions list with message link
+- Weekly availability editor — toggle days, set start/end hours
+- `/coach-portal/settings` — edit bio, price, certifications, active status
+- `/coach-portal/availability` — visual day grid + hour selectors
+
+### Score actions
+- `submitScore` server action now updates Elo, streak, and player profile stats atomically
+
+## 2026-07-07 — Server actions, responsive UI
+- All client mutations migrated to Server Actions
+- Mobile hamburger nav with animated open/close
+- All grids responsive: `grid-cols-1 sm:grid-cols-2`
+- `useTransition` replaces manual loading state everywhere
+
 ## 2026-07-07 — All sections built
+- Feed, Friends, Coaches, Shop, Messages, Players, Bookings, Events detail
+- Manage CRUD (courts + events), Admin sub-pages, Notifications
+- Stripe webhook handles booking, ticket, order, coach hire
+- Uploadthing for avatars, court images, post images
 
-### New pages
-- `app/feed/` — social feed with post composer, likes, comments, friends-only view
-- `app/friends/` — friend requests, player search, accept/decline/remove
-- `app/coaches/` — coach directory with booking/hire + Stripe checkout
-- `app/shop/` — product grid with category filter, localStorage cart, Stripe checkout
-- `app/shop/order/[id]/` — order confirmation
-- `app/messages/` — conversation list + new conversation flow
-- `app/messages/[id]/` — real-time chat (3s polling, ready for Pusher upgrade)
-- `app/players/[username]/` — public player profile with stats and recent matches
-- `app/events/[id]/` — event detail with ticket purchase
-- `app/bookings/[id]/` — booking confirmation page
-- `app/notifications/` — notification center with mark-all-read
-- `app/manage/courts/new` + `[id]` — court CRUD with slot manager
-- `app/manage/events/new` + `[id]` — event CRUD
-- `app/admin/users/` — user table with roles
-- `app/admin/products/` + `new` + `[id]` — full product management (admin-only store)
-- `app/admin/orders/` — order history with status
-
-### New API routes
-- `POST /api/posts` — create post
-- `POST /api/posts/[id]/like` — toggle like
-- `POST /api/friends` — send friend request + notification
-- `PATCH /api/friends/[id]` — accept/block
-- `DELETE /api/friends/[id]` — remove friend
-- `GET /api/players/search` — player search
-- `POST /api/coaches/hire` — book coach + Stripe
-- `POST /api/conversations` — create/reuse 1:1 conversation
-- `GET/POST /api/conversations/[id]/messages` — fetch + send messages
-- `POST /api/shop/checkout` — cart checkout + Stripe + order creation
-- `POST /api/tickets` — ticket purchase + Stripe
-- `POST /api/notifications/read` — mark all read
-- `POST/PATCH /api/manage/courts` — court CRUD (court manager)
-- `POST /api/manage/courts/[id]/slots` — add availability slots
-- `POST/PATCH /api/manage/events` — event CRUD (event manager)
-- `POST/PATCH /api/admin/products` — product management (admin only)
-- `POST /api/uploadthing` — file uploads (avatar, court image, post image)
-
-### Shared components
-- `components/nav.tsx` — sticky top nav, role-aware, Clerk UserButton
-- Global layout updated to include Nav + consistent page wrapper
-
-### Stripe webhook expanded
-- Booking confirmation → notification
-- Ticket confirmation
-- Order confirmation + stock decrement
-- Coach hire confirmation
-
-### Uploadthing
-- `lib/uploadthing.ts` — file router for avatar, courtImage, postImage
-- `api/uploadthing/route.ts` — handler wired up
-
-## 2026-07-07 — Supabase migration
-- Switched DATABASE_URL to Supabase transaction pooler (port 6543)
-- Added DIRECT_URL for Prisma migrations (port 5432)
-- Updated prisma/schema.prisma with directUrl
-
-## 2026-07-07 — Initial scaffold
-- Next.js 15 App Router, Clerk, Prisma schema, middleware, security headers
-- Role system, Zod validation, Stripe + Clerk webhooks
-- Base pages: home, sign-in, sign-up, onboarding, dashboard, courts, leaderboard, events, scores, settings, manage, admin
+## 2026-07-07 — Supabase integration
+- Transaction pooler (port 6543) for runtime, direct URL for migrations

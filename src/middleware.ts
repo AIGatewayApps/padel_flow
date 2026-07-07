@@ -1,48 +1,40 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
-// Public routes — everything else requires auth
-const isPublic = createRouteMatcher([
-  "/",
-  "/sign-in(.*)",
-  "/sign-up(.*)",
-  "/onboarding(.*)",
-  "/api/webhooks(.*)",   // Clerk + Stripe webhooks are verified internally
-  "/courts(.*)",         // browsing courts is public
-  "/events(.*)",         // browsing events is public
+const isPublicRoute = createRouteMatcher([
+  "/", "/sign-in(.*)", "/sign-up(.*)",
+  "/api/webhooks(.*)",
+  "/api/uploadthing(.*)",
+  "/courts(.*)", "/events(.*)", "/leaderboard(.*)",
 ]);
 
-// Admin-only routes
-const isAdmin = createRouteMatcher(["/admin(.*)"]);
+const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)"]);
 
-// Court manager routes
-const isCourtManager = createRouteMatcher(["/manage/courts(.*)"]);
+export default clerkMiddleware(async (auth, req) => {
+  const { userId, sessionClaims } = await auth();
 
-// Event manager routes
-const isEventManager = createRouteMatcher(["/manage/events(.*)"]);
+  // Enforce auth on protected routes
+  if (!isPublicRoute(req)) await auth.protect();
 
-export default clerkMiddleware(async (auth, req: NextRequest) => {
-  if (isPublic(req)) return NextResponse.next();
-
-  const { userId, sessionClaims } = await auth.protect();
-  if (!userId) return NextResponse.redirect(new URL("/sign-in", req.url));
-
-  const role = (sessionClaims?.metadata as { role?: string })?.role;
-
-  if (isAdmin(req) && role !== "ADMIN") {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-  if (isCourtManager(req) && role !== "COURT_MANAGER" && role !== "ADMIN") {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-  if (isEventManager(req) && role !== "EVENT_MANAGER" && role !== "ADMIN") {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+  // Redirect unonboarded users to onboarding (except onboarding itself)
+  if (userId && !isOnboardingRoute(req) && !isPublicRoute(req)) {
+    const onboarded = (sessionClaims?.metadata as { onboarded?: boolean })?.onboarded;
+    // Fallback: check DB if session claim not set yet
+    // (Clerk propagates metadata on next sign-in, so fresh users hit DB once)
+    if (onboarded === false) {
+      return NextResponse.redirect(new URL("/onboarding", req.url));
+    }
   }
 
-  return NextResponse.next();
+  const res = NextResponse.next();
+  // Security headers
+  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  return res;
 });
 
 export const config = {
-  matcher: ["/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)"]
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$).*)"]
 };

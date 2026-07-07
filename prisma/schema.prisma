@@ -4,14 +4,13 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")   // Transaction pooler (pgBouncer) — runtime
-  directUrl = env("DIRECT_URL")     // Direct connection — migrations only
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
-
-// ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum Role {
   PLAYER
+  COACH
   COURT_MANAGER
   EVENT_MANAGER
   ADMIN
@@ -44,51 +43,59 @@ enum MatchResult {
   DRAW
 }
 
-// ─── Core User (synced from Clerk webhook) ────────────────────────────────────
+enum ChallengeStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  COMPLETED
+}
 
 model User {
-  id            String   @id // Clerk user ID
-  email         String   @unique
-  username      String   @unique
-  displayName   String
-  avatarUrl     String?
-  bio           String?
-  role          Role     @default(PLAYER)
-  country       String?
-  city          String?
-  level         Float?   // UTR-style numeric level
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id
+  email       String   @unique
+  username    String   @unique
+  displayName String
+  avatarUrl   String?
+  bio         String?
+  role        Role     @default(PLAYER)
+  country     String?
+  city        String?
+  eloRating   Int      @default(1200)
+  streak      Int      @default(0)
+  lastPlayedAt DateTime?
+  onboarded   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  // Relations
   profile          PlayerProfile?
   courtManager     CourtManagerProfile?
   eventManager     EventManagerProfile?
+  coachProfile     Coach?
   settings         UserSettings?
-  friendsInitiated Friendship[]  @relation("initiator")
-  friendsReceived  Friendship[]  @relation("receiver")
+  friendsInitiated Friendship[]    @relation("initiator")
+  friendsReceived  Friendship[]    @relation("receiver")
   messages         Message[]
   bookings         Booking[]
   orders           Order[]
   scores           Score[]
-  coachHires       CoachHire[]   @relation("student")
-  coachProfiles    Coach?
+  coachHires       CoachHire[]     @relation("student")
   eventTickets     Ticket[]
   notifications    Notification[]
   posts            Post[]
   postLikes        PostLike[]
   postComments     PostComment[]
+  challengesSent   MatchChallenge[] @relation("challenger")
+  challengesReceived MatchChallenge[] @relation("challenged")
+  conversationMembers ConversationMember[]
 }
-
-// ─── Profile Extensions ───────────────────────────────────────────────────────
 
 model PlayerProfile {
   id          String  @id @default(cuid())
   userId      String  @unique
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   racket      String?
-  hand        String? // LEFT | RIGHT
-  position    String? // DRIVE | REVES
+  hand        String?
+  position    String?
   ranking     Int?
   totalWins   Int     @default(0)
   totalLosses Int     @default(0)
@@ -113,31 +120,24 @@ model EventManagerProfile {
   events      Event[]
 }
 
-// ─── Settings ─────────────────────────────────────────────────────────────────
-
 model UserSettings {
-  id                    String  @id @default(cuid())
-  userId                String  @unique
-  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // Notifications
-  emailBookings         Boolean @default(true)
-  emailMessages         Boolean @default(true)
-  emailMarketing        Boolean @default(false)
-  pushBookings          Boolean @default(true)
-  pushMessages          Boolean @default(true)
-  pushFriendRequests    Boolean @default(true)
-  // Privacy
-  profilePublic         Boolean @default(true)
-  showLevel             Boolean @default(true)
-  showLocation          Boolean @default(true)
-  allowFriendRequests   Boolean @default(true)
-  // UI
-  language              String  @default("en")
-  timezone              String  @default("UTC")
-  theme                 String  @default("system") // system | light | dark
+  id                  String  @id @default(cuid())
+  userId              String  @unique
+  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailBookings       Boolean @default(true)
+  emailMessages       Boolean @default(true)
+  emailMarketing      Boolean @default(false)
+  pushBookings        Boolean @default(true)
+  pushMessages        Boolean @default(true)
+  pushFriendRequests  Boolean @default(true)
+  profilePublic       Boolean @default(true)
+  showLevel           Boolean @default(true)
+  showLocation        Boolean @default(true)
+  allowFriendRequests Boolean @default(true)
+  language            String  @default("en")
+  timezone            String  @default("UTC")
+  theme               String  @default("system")
 }
-
-// ─── Social ───────────────────────────────────────────────────────────────────
 
 model Friendship {
   id          String       @id @default(cuid())
@@ -153,8 +153,8 @@ model Friendship {
 }
 
 model Conversation {
-  id        String    @id @default(cuid())
-  createdAt DateTime  @default(now())
+  id        String               @id @default(cuid())
+  createdAt DateTime             @default(now())
   messages  Message[]
   members   ConversationMember[]
 }
@@ -164,6 +164,7 @@ model ConversationMember {
   conversationId String
   userId         String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
 }
@@ -178,8 +179,6 @@ model Message {
   sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 }
 
-// ─── Feed / Posts ─────────────────────────────────────────────────────────────
-
 model Post {
   id        String        @id @default(cuid())
   authorId  String
@@ -193,11 +192,11 @@ model Post {
 }
 
 model PostLike {
-  id        String   @id @default(cuid())
-  postId    String
-  userId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  postId String
+  userId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId])
 }
@@ -212,8 +211,6 @@ model PostComment {
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
-// ─── Courts ───────────────────────────────────────────────────────────────────
-
 model Court {
   id           String              @id @default(cuid())
   managerId    String
@@ -226,7 +223,7 @@ model Court {
   lng          Float?
   imageUrl     String?
   pricePerHour Float
-  surface      String?             // crystal | artificial_grass | concrete
+  surface      String?
   indoor       Boolean             @default(false)
   active       Boolean             @default(true)
   createdAt    DateTime            @default(now())
@@ -259,30 +256,52 @@ model Booking {
   slot        CourtSlot     @relation(fields: [slotId], references: [id])
 }
 
-// ─── Scores & Leaderboard ─────────────────────────────────────────────────────
-
 model Score {
   id         String      @id @default(cuid())
   userId     String
   opponentId String?
-  sets       Json        // [{player: 6, opponent: 3}, ...]
+  sets       Json
   result     MatchResult
   courtId    String?
   playedAt   DateTime    @default(now())
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ─── Coaches ──────────────────────────────────────────────────────────────────
+model MatchChallenge {
+  id           String          @id @default(cuid())
+  challengerId String
+  challengedId String
+  courtId      String?
+  slotId       String?
+  message      String?
+  status       ChallengeStatus @default(PENDING)
+  createdAt    DateTime        @default(now())
+  challenger   User            @relation("challenger", fields: [challengerId], references: [id], onDelete: Cascade)
+  challenged   User            @relation("challenged", fields: [challengedId], references: [id], onDelete: Cascade)
+}
 
 model Coach {
-  id           String      @id @default(cuid())
-  userId       String      @unique
-  bio          String?
-  pricePerHour Float
+  id             String      @id @default(cuid())
+  userId         String      @unique
+  bio            String?
+  pricePerHour   Float
   certifications String?
-  active       Boolean     @default(true)
-  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  hires        CoachHire[]
+  specialties    String[]
+  languages      String[]
+  active         Boolean     @default(true)
+  stripeAccountId String?
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hires          CoachHire[]
+  availability   CoachAvailability[]
+}
+
+model CoachAvailability {
+  id        String   @id @default(cuid())
+  coachId   String
+  dayOfWeek Int      // 0=Sun … 6=Sat
+  startHour Int      // 0-23
+  endHour   Int
+  coach     Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
 }
 
 model CoachHire {
@@ -293,12 +312,11 @@ model CoachHire {
   status      BookingStatus @default(PENDING)
   totalAmount Float
   stripeId    String?
+  notes       String?
   createdAt   DateTime      @default(now())
   student     User          @relation("student", fields: [studentId], references: [id], onDelete: Cascade)
   coach       Coach         @relation(fields: [coachId], references: [id], onDelete: Cascade)
 }
-
-// ─── Events & Tickets ─────────────────────────────────────────────────────────
 
 model Event {
   id          String              @id @default(cuid())
@@ -317,17 +335,15 @@ model Event {
 }
 
 model Ticket {
-  id        String      @id @default(cuid())
+  id        String   @id @default(cuid())
   eventId   String
   userId    String
   stripeId  String?
-  qrCode    String?     // ponytail: use a generated UUID as QR payload
-  createdAt DateTime    @default(now())
-  event     Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  qrCode    String?
+  createdAt DateTime @default(now())
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
-
-// ─── Shop ─────────────────────────────────────────────────────────────────────
 
 model Product {
   id          String      @id @default(cuid())
@@ -336,7 +352,7 @@ model Product {
   imageUrl    String?
   price       Float
   stock       Int         @default(0)
-  category    String?     // racket | ball | clothing | accessories
+  category    String?
   active      Boolean     @default(true)
   createdAt   DateTime    @default(now())
   orderItems  OrderItem[]
@@ -348,7 +364,7 @@ model Order {
   status    OrderStatus @default(PENDING)
   total     Float
   stripeId  String?
-  address   Json?       // shipping address snapshot
+  address   Json?
   createdAt DateTime    @default(now())
   user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   items     OrderItem[]
@@ -359,17 +375,15 @@ model OrderItem {
   orderId   String
   productId String
   qty       Int
-  price     Float   // price at time of purchase
+  price     Float
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id])
 }
 
-// ─── Notifications ────────────────────────────────────────────────────────────
-
 model Notification {
   id        String   @id @default(cuid())
   userId    String
-  type      String   // friend_request | booking_confirmed | message | etc.
+  type      String
   body      String
   href      String?
   read      Boolean  @default(false)

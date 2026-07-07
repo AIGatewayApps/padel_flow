@@ -1,34 +1,79 @@
 import { db } from "@/lib/db";
 import Image from "next/image";
 import Link from "next/link";
+import { auth } from "@clerk/nextjs/server";
 
 export const metadata = { title: "Leaderboard" };
 
 export default async function LeaderboardPage() {
-  const players = await db.playerProfile.findMany({
-    where: { user: { settings: { profilePublic: true } } },
-    include: { user: true },
-    orderBy: { totalWins: "desc" },
-    take: 100,
-  });
+  const { userId } = await auth();
+
+  const [byElo, byWins, byStreak] = await Promise.all([
+    db.user.findMany({
+      where: { settings: { profilePublic: true } },
+      select: { id: true, displayName: true, username: true, avatarUrl: true, eloRating: true, city: true },
+      orderBy: { eloRating: "desc" },
+      take: 50,
+    }),
+    db.playerProfile.findMany({
+      include: { user: { select: { id: true, displayName: true, username: true, avatarUrl: true } } },
+      orderBy: { totalWins: "desc" },
+      take: 20,
+    }),
+    db.user.findMany({
+      where: { streak: { gt: 0 } },
+      select: { id: true, displayName: true, username: true, avatarUrl: true, streak: true },
+      orderBy: { streak: "desc" },
+      take: 20,
+    }),
+  ]);
+
+  const tabs = [
+    { id: "elo", label: "🏆 Elo Rating" },
+    { id: "wins", label: "⚡ Most Wins" },
+    { id: "streak", label: "🔥 Streaks" },
+  ];
 
   return (
-    <main className="max-w-3xl mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-8">Leaderboard</h1>
-      <ol className="flex flex-col gap-3">
-        {players.map((p, i) => (
-          <li key={p.id} className="flex items-center gap-4 border rounded-xl px-4 py-3">
-            <span className="text-2xl font-bold text-gray-300 w-8">{i + 1}</span>
-            {p.user.avatarUrl && (
-              <Image src={p.user.avatarUrl} alt={p.user.displayName} width={40} height={40} className="rounded-full" />
-            )}
-            <Link href={`/players/${p.user.username}`} className="flex-1 font-medium hover:text-green-600">
-              {p.user.displayName} <span className="text-gray-400 text-sm">@{p.user.username}</span>
+    <div className="max-w-3xl mx-auto px-4 sm:px-0">
+      <h1 className="text-2xl font-bold mb-8">Leaderboard</h1>
+
+      {/* Elo Top 3 podium */}
+      {byElo.length >= 3 && (
+        <div className="flex justify-center gap-4 mb-10">
+          {[byElo[1], byElo[0], byElo[2]].map((player, idx) => (
+            <Link key={player.id} href={`/players/${player.username}`}
+              className={`flex flex-col items-center gap-2 ${ idx === 1 ? "-mt-4" : "" }`}>
+              <div className={`text-2xl ${ idx === 1 ? "text-4xl" : "" }`}>{["🥈", "🥇", "🥉"][idx]}</div>
+              {player.avatarUrl
+                ? <Image src={player.avatarUrl} alt={player.displayName} width={idx === 1 ? 56 : 44} height={idx === 1 ? 56 : 44} className="rounded-full" />
+                : <div className={`rounded-full bg-green-100 flex items-center justify-center font-bold text-green-700 ${ idx === 1 ? "w-14 h-14 text-xl" : "w-11 h-11" }`}>{player.displayName[0]}</div>}
+              <p className="text-xs font-semibold text-center">{player.displayName}</p>
+              <p className="text-xs text-green-600 font-bold">{player.eloRating}</p>
             </Link>
-            <span className="text-sm text-gray-500">{p.totalWins}W / {p.totalLosses}L</span>
-          </li>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Full rankings</h2>
+        {byElo.map((player, i) => (
+          <Link key={player.id} href={`/players/${player.username}`}
+            className={`flex items-center gap-4 border rounded-2xl px-4 py-3 hover:border-green-400 transition-colors ${
+              player.id === userId ? "bg-green-50 dark:bg-green-900/20 border-green-300" : "bg-white dark:bg-gray-900"
+            }`}>
+            <span className={`w-7 text-center font-bold text-sm ${ i < 3 ? "text-green-600" : "text-gray-400" }`}>{i + 1}</span>
+            {player.avatarUrl
+              ? <Image src={player.avatarUrl} alt={player.displayName} width={36} height={36} className="rounded-full" />
+              : <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center font-bold text-sm">{player.displayName[0]}</div>}
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm truncate">{player.displayName} {player.id === userId && <span className="text-green-600">(you)</span>}</p>
+              {player.city && <p className="text-xs text-gray-400">{player.city}</p>}
+            </div>
+            <span className="text-green-600 font-bold text-sm shrink-0">{player.eloRating}</span>
+          </Link>
         ))}
-      </ol>
-    </main>
+      </div>
+    </div>
   );
 }
