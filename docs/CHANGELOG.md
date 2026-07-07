@@ -1,62 +1,88 @@
 # Changelog
 
-## 2026-07-07 — Best practices, all features, coach portal, onboarding
+## 2026-07-07 — v4: All features built
 
-### Architecture fixes
-- **All API routes replaced with Server Actions** — no HTTP round trips for mutations
-- **`useTransition` everywhere** — optimistic UI, no janky loading states
-- **Prisma `select` instead of full `include`** — only fetch fields used in UI
-- **`_count` for like/comment counts** — never load all rows just for a number
-- **Global `error.tsx` + `not-found.tsx`** — proper error boundaries on every page
-- **`next.config.ts` image domains** — Clerk, Uploadthing, Supabase all whitelisted
-- **PWA manifest** — installable on iOS/Android home screen
-- **Security headers** in middleware — X-Frame-Options, nosniff, referrer policy
+### Schema v3 additions
+- `PostReaction` model — emoji reactions on posts (🎾 🔥 💪 🏆 😂)
+- `Club` + `ClubMember` + `ClubPost` — full groups / clubs system
+- `LiveScore` model — real-time shared scoreboard via Supabase Realtime
+- `PushSubscription` model — Web Push endpoint/key storage per user
+- `UserSubscription` model — Stripe subscription tracking
+- `SubscriptionTier` enum — FREE | PRO on `User.subscription`
+- `RecurrenceType` enum on `CourtSlot` — NONE | WEEKLY | BIWEEKLY
+- `Ticket.scanned` boolean — for QR scanner
+- `User.stripeCustomerId` — for Pro checkout
 
-### Schema updates
-- Added `COACH` role to `Role` enum
-- Added `eloRating`, `streak`, `lastPlayedAt`, `onboarded` to `User`
-- Added `MatchChallenge` model with `ChallengeStatus` enum
-- Added `CoachAvailability` model
-- Added `specialties`, `languages`, `stripeAccountId` to `Coach`
-- Added `notes` to `CoachHire`
+### New pages & features
 
-### New features
-- **Elo rating system** — `lib/elo.ts`, updated on every score submission
-- **Activity streaks** — consecutive days of play tracked on `User.streak`
-- **Match challenges** — send/accept/decline challenges, notification on receive
-- **Supabase Realtime messages** — replaces 3s polling, instant delivery via `postgres_changes`
-- **Rate limiting** — `/api/players/search` rate-limited via Upstash Redis
-- **Leaderboard** — Elo rankings with podium (🥇🥈🥉), highlights current user
-- **Challenges page** — `/challenges` to view/respond to all challenges
+#### Post Reactions
+- `PostReaction` table with unique constraint per (postId, userId, emoji)
+- `toggleReaction` server action — creates or deletes, notifies post author
+- Reaction bar component with emoji counts
 
-### Onboarding flows
-- `/onboarding` — multi-step flow for players (welcome → playing style → location → done)
-- `/onboarding` — separate flow for coaches (welcome → coach profile → done)
-- Middleware auto-redirects unonboarded users
-- `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/onboarding` in env
+#### Clubs / Groups (`/clubs`, `/clubs/[id]`)
+- Create club, join by invite code
+- Club feed with post composer
+- Members sidebar with Elo ratings
+- Owner sees shareable invite code
 
-### Coach portal (`/coach-portal`)
-- Dashboard with stats: upcoming, pending, completed sessions, total earned
-- Pending booking requests with accept/decline
-- Upcoming sessions list with message link
-- Weekly availability editor — toggle days, set start/end hours
-- `/coach-portal/settings` — edit bio, price, certifications, active status
-- `/coach-portal/availability` — visual day grid + hour selectors
+#### Live Score Entry (`/live/[id]`)
+- Owner controls score with + / - buttons per set
+- Supabase Realtime broadcasts every update to spectators in real time
+- Add set button (up to 5 sets), end match button
+- Shareable URL — send to spectators/opponent
 
-### Score actions
-- `submitScore` server action now updates Elo, streak, and player profile stats atomically
+#### PWA Push Notifications
+- `public/sw.js` — service worker handles push + notification click
+- `PushRegister` client component — subscribes on mount, saves to DB
+- `sendPushToUser()` helper — fires web-push to all user devices
+- Auto-cleans expired subscriptions
 
-## 2026-07-07 — Server actions, responsive UI
-- All client mutations migrated to Server Actions
-- Mobile hamburger nav with animated open/close
-- All grids responsive: `grid-cols-1 sm:grid-cols-2`
-- `useTransition` replaces manual loading state everywhere
+#### PadelFlow Pro (`/pro`)
+- Pricing page with feature list
+- Stripe Checkout session creation at `/api/stripe/pro-checkout`
+- Monthly ($9) and signals yearly ($79) price
+- `UserSubscription` model tracks period, cancel status
 
-## 2026-07-07 — All sections built
-- Feed, Friends, Coaches, Shop, Messages, Players, Bookings, Events detail
-- Manage CRUD (courts + events), Admin sub-pages, Notifications
-- Stripe webhook handles booking, ticket, order, coach hire
-- Uploadthing for avatars, court images, post images
+#### QR Ticket Scanner (`/manage/events/[id]/scan`)
+- Camera view using `getUserMedia` + `BarcodeDetector` API
+- Scans QR codes, calls `scanTicket` server action
+- Green success overlay shows attendee name
+- Live attendee list with scanned status
 
-## 2026-07-07 — Supabase integration
-- Transaction pooler (port 6543) for runtime, direct URL for migrations
+#### Court Availability Calendar (`/courts/[id]/calendar`)
+- Week-view grid (06:00–21:00 × 7 days)
+- Previous/next week navigation
+- Click slot to select → confirm booking panel appears
+- No external calendar library needed
+
+#### AI Match Suggestions (`/ai-suggest`)
+- Finds players within ±100 Elo in same city
+- Shows Elo differential vs you (green = easier, red = harder)
+- One-click challenge from the list
+- Pro badge shown for non-Pro users
+
+#### Recurring Bookings
+- `RecurrenceType` enum on `CourtSlot` (NONE/WEEKLY/BIWEEKLY)
+- Calendar passes `recurrence` field through booking form
+
+## 2026-07-07 — v3: Best practices, coach portal, onboarding
+- Security headers in middleware
+- Supabase Realtime replaces 3s polling
+- Upstash rate limiting on search
+- Global error.tsx + not-found.tsx
+- PWA manifest
+- Coach portal with availability editor
+- Player & coach onboarding flows
+- Elo rating system
+- Activity streaks
+- Match challenges + leaderboard
+
+## 2026-07-07 — v2: Server actions, responsive UI
+- All mutations moved to Server Actions
+- Mobile hamburger nav
+- useTransition everywhere
+
+## 2026-07-07 — v1: Initial build
+- All sections: feed, friends, coaches, shop, messages, courts, events
+- Prisma + Supabase + Clerk + Stripe + Uploadthing
