@@ -1,0 +1,377 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  PLAYER
+  COURT_MANAGER
+  EVENT_MANAGER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  REFUNDED
+}
+
+enum FriendStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+enum MatchResult {
+  WIN
+  LOSS
+  DRAW
+}
+
+// ─── Core User (synced from Clerk webhook) ───────────────────────────────────
+
+model User {
+  id            String   @id // Clerk user ID
+  email         String   @unique
+  username      String   @unique
+  displayName   String
+  avatarUrl     String?
+  bio           String?
+  role          Role     @default(PLAYER)
+  country       String?
+  city          String?
+  level         Float?   // UTR-style numeric level
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  profile          PlayerProfile?
+  courtManager     CourtManagerProfile?
+  eventManager     EventManagerProfile?
+  settings         UserSettings?
+  friendsInitiated Friendship[]  @relation("initiator")
+  friendsReceived  Friendship[]  @relation("receiver")
+  messages         Message[]
+  bookings         Booking[]
+  orders           Order[]
+  scores           Score[]
+  coachHires       CoachHire[]   @relation("student")
+  coachProfiles    Coach?
+  eventTickets     Ticket[]
+  notifications    Notification[]
+  posts            Post[]
+  postLikes        PostLike[]
+  postComments     PostComment[]
+}
+
+// ─── Profile Extensions ──────────────────────────────────────────────────────
+
+model PlayerProfile {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  racket      String?
+  hand        String? // LEFT | RIGHT
+  position    String? // DRIVE | REVES
+  ranking     Int?
+  totalWins   Int     @default(0)
+  totalLosses Int     @default(0)
+  totalDraws  Int     @default(0)
+}
+
+model CourtManagerProfile {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName String
+  taxId       String?
+  courts      Court[]
+}
+
+model EventManagerProfile {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName String
+  taxId       String?
+  events      Event[]
+}
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+
+model UserSettings {
+  id                    String  @id @default(cuid())
+  userId                String  @unique
+  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Notifications
+  emailBookings         Boolean @default(true)
+  emailMessages         Boolean @default(true)
+  emailMarketing        Boolean @default(false)
+  pushBookings          Boolean @default(true)
+  pushMessages          Boolean @default(true)
+  pushFriendRequests    Boolean @default(true)
+  // Privacy
+  profilePublic         Boolean @default(true)
+  showLevel             Boolean @default(true)
+  showLocation          Boolean @default(true)
+  allowFriendRequests   Boolean @default(true)
+  // UI
+  language              String  @default("en")
+  timezone              String  @default("UTC")
+  theme                 String  @default("system") // system | light | dark
+}
+
+// ─── Social ──────────────────────────────────────────────────────────────────
+
+model Friendship {
+  id          String       @id @default(cuid())
+  initiatorId String
+  receiverId  String
+  status      FriendStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  initiator   User         @relation("initiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  receiver    User         @relation("receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([initiatorId, receiverId])
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  messages  Message[]
+  members   ConversationMember[]
+}
+
+model ConversationMember {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String
+  body           String
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+// ─── Feed / Posts ────────────────────────────────────────────────────────────
+
+model Post {
+  id        String        @id @default(cuid())
+  authorId  String
+  body      String
+  imageUrl  String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes     PostLike[]
+  comments  PostComment[]
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+}
+
+model PostComment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+// ─── Courts ──────────────────────────────────────────────────────────────────
+
+model Court {
+  id          String              @id @default(cuid())
+  managerId   String
+  name        String
+  description String?
+  address     String
+  city        String
+  country     String
+  lat         Float?
+  lng         Float?
+  imageUrl    String?
+  pricePerHour Float
+  surface     String?             // crystal | artificial_grass | concrete
+  indoor      Boolean             @default(false)
+  active      Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  manager     CourtManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  slots       CourtSlot[]
+  bookings    Booking[]
+}
+
+model CourtSlot {
+  id        String    @id @default(cuid())
+  courtId   String
+  startsAt  DateTime
+  endsAt    DateTime
+  available Boolean   @default(true)
+  court     Court     @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  booking   Booking?
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  userId      String
+  courtId     String
+  slotId      String        @unique
+  status      BookingStatus @default(PENDING)
+  totalAmount Float
+  stripeId    String?
+  createdAt   DateTime      @default(now())
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  court       Court         @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  slot        CourtSlot     @relation(fields: [slotId], references: [id])
+}
+
+// ─── Scores & Leaderboard ────────────────────────────────────────────────────
+
+model Score {
+  id         String      @id @default(cuid())
+  userId     String
+  opponentId String?
+  sets       Json        // [{player: 6, opponent: 3}, ...]
+  result     MatchResult
+  courtId    String?
+  playedAt   DateTime    @default(now())
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Coaches ─────────────────────────────────────────────────────────────────
+
+model Coach {
+  id          String      @id @default(cuid())
+  userId      String      @unique
+  bio         String?
+  pricePerHour Float
+  certifications String?
+  active      Boolean     @default(true)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hires       CoachHire[]
+}
+
+model CoachHire {
+  id        String        @id @default(cuid())
+  studentId String
+  coachId   String
+  scheduledAt DateTime
+  status    BookingStatus @default(PENDING)
+  totalAmount Float
+  stripeId  String?
+  createdAt DateTime      @default(now())
+  student   User          @relation("student", fields: [studentId], references: [id], onDelete: Cascade)
+  coach     Coach         @relation(fields: [coachId], references: [id], onDelete: Cascade)
+}
+
+// ─── Events & Tickets ────────────────────────────────────────────────────────
+
+model Event {
+  id          String              @id @default(cuid())
+  managerId   String
+  title       String
+  description String?
+  imageUrl    String?
+  location    String
+  startsAt    DateTime
+  endsAt      DateTime
+  ticketPrice Float               @default(0)
+  capacity    Int?
+  createdAt   DateTime            @default(now())
+  manager     EventManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  tickets     Ticket[]
+}
+
+model Ticket {
+  id        String      @id @default(cuid())
+  eventId   String
+  userId    String
+  stripeId  String?
+  qrCode    String?     // ponytail: use a generated UUID as QR payload
+  createdAt DateTime    @default(now())
+  event     Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Shop ────────────────────────────────────────────────────────────────────
+
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  imageUrl    String?
+  price       Float
+  stock       Int         @default(0)
+  category    String?     // racket | ball | clothing | accessories
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  orderItems  OrderItem[]
+}
+
+model Order {
+  id         String      @id @default(cuid())
+  userId     String
+  status     OrderStatus @default(PENDING)
+  total      Float
+  stripeId   String?
+  address    Json?       // shipping address snapshot
+  createdAt  DateTime    @default(now())
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items      OrderItem[]
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  qty       Int
+  price     Float   // price at time of purchase
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // friend_request | booking_confirmed | message | etc.
+  body      String
+  href      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

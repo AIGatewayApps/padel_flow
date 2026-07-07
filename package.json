@@ -1,0 +1,39 @@
+{
+  "name": "padelflow",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6",
+    "@prisma/client": "^6",
+    "@stripe/stripe-js": "^4",
+    "@uploadthing/react": "^7",
+    "next": "15.3.0",
+    "pusher": "^5",
+    "pusher-js": "^8",
+    "react": "^19",
+    "react-dom": "^19",
+    "stripe": "^16",
+    "uploadthing": "^7",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.3.0",
+    "prisma": "^6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
