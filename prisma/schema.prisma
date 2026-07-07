@@ -15,7 +15,16 @@ enum Role {
   COACH
   COURT_MANAGER
   EVENT_MANAGER
+  VENDOR
+  ADVERTISER
   ADMIN
+}
+
+enum OrgMemberRole {
+  OWNER
+  MANAGER
+  STAFF
+  VIEWER
 }
 
 enum BookingStatus {
@@ -63,6 +72,38 @@ enum SubscriptionTier {
   PRO
 }
 
+enum AdType {
+  FEED_BANNER
+  COURT_SIDEBAR
+  EVENT_SPOTLIGHT
+  PUSH_SPONSORED
+  LEADERBOARD_SPONSOR
+}
+
+enum AdStatus {
+  PENDING_REVIEW
+  ACTIVE
+  PAUSED
+  REJECTED
+  COMPLETED
+}
+
+enum AuditAction {
+  USER_BANNED
+  USER_UNBANNED
+  BOOKING_REFUNDED
+  AD_APPROVED
+  AD_REJECTED
+  VENDOR_APPROVED
+  VENDOR_REJECTED
+  PRODUCT_REMOVED
+  ORG_CREATED
+  ORG_DELETED
+  STAFF_INVITED
+  STAFF_REMOVED
+  ROLE_CHANGED
+}
+
 // ─── User ────────────────────────────────────────────────────────────────────
 
 model User {
@@ -80,6 +121,8 @@ model User {
   lastPlayedAt DateTime?
   onboarded    Boolean          @default(false)
   subscription SubscriptionTier @default(FREE)
+  bannedAt     DateTime?
+  deletedAt    DateTime?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
@@ -87,28 +130,91 @@ model User {
   courtManager        CourtManagerProfile?
   eventManager        EventManagerProfile?
   coachProfile        Coach?
+  vendorProfile       Vendor?
   settings            UserSettings?
-  friendsInitiated    Friendship[]       @relation("initiator")
-  friendsReceived     Friendship[]       @relation("receiver")
+  friendsInitiated    Friendship[]         @relation("initiator")
+  friendsReceived     Friendship[]         @relation("receiver")
   messages            Message[]
   bookings            Booking[]
   orders              Order[]
-  scores              Score[]            @relation("scoreUser")
-  scoresAsOpponent    Score[]            @relation("scoreOpponent")
-  coachHires          CoachHire[]        @relation("student")
+  scores              Score[]              @relation("scoreUser")
+  scoresAsOpponent    Score[]              @relation("scoreOpponent")
+  coachHires          CoachHire[]          @relation("student")
   eventTickets        Ticket[]
   notifications       Notification[]
   posts               Post[]
   postLikes           PostLike[]
   postComments        PostComment[]
   postReactions       PostReaction[]
-  challengesSent      MatchChallenge[]   @relation("challenger")
-  challengesReceived  MatchChallenge[]   @relation("challenged")
+  challengesSent      MatchChallenge[]     @relation("challenger")
+  challengesReceived  MatchChallenge[]     @relation("challenged")
   conversationMembers ConversationMember[]
   clubMemberships     ClubMember[]
-  clubsOwned          Club[]             @relation("owner")
+  clubsOwned          Club[]               @relation("owner")
   liveScores          LiveScore[]
   pushSubscriptions   PushSubscription[]
+  orgMemberships      OrgMember[]
+  orgsOwned           Organization[]       @relation("orgOwner")
+  coachReviews        CoachReview[]        @relation("reviewer")
+  ads                 Ad[]
+  adImpressions       AdImpression[]
+  auditLogs           AuditLog[]           @relation("auditActor")
+  waitlistEntries     EventWaitlist[]
+}
+
+// ─── Organization / Employee System ─────────────────────────────────────────
+
+model Organization {
+  id          String        @id @default(cuid())
+  ownerId     String
+  name        String
+  slug        String        @unique
+  logoUrl     String?
+  plan        String        @default("FREE") // FREE | PRO | ENTERPRISE
+  deletedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  owner       User          @relation("orgOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     OrgMember[]
+  locations   OrgLocation[]
+  ads         Ad[]
+
+  @@index([ownerId])
+  @@index([slug])
+}
+
+model OrgMember {
+  id          String        @id @default(cuid())
+  orgId       String
+  userId      String
+  role        OrgMemberRole @default(STAFF)
+  permissions Json          @default("{}") // { "courts.manage": true, "reports.view": false, ... }
+  locationIds String[]      // which OrgLocation IDs this member can access (empty = all)
+  invitedAt   DateTime      @default(now())
+  org         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([userId])
+}
+
+model OrgLocation {
+  id        String       @id @default(cuid())
+  orgId     String
+  name      String
+  address   String
+  city      String
+  country   String
+  lat       Float?
+  lng       Float?
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  courts    Court[]
+  events    Event[]
+
+  @@index([orgId])
+  @@index([city])
 }
 
 // ─── Profile Extensions ──────────────────────────────────────────────────────
@@ -127,18 +233,18 @@ model PlayerProfile {
 }
 
 model CourtManagerProfile {
-  id          String  @id @default(cuid())
-  userId      String  @unique
-  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String       @id @default(cuid())
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyName String
   taxId       String?
   courts      Court[]
 }
 
 model EventManagerProfile {
-  id          String  @id @default(cuid())
-  userId      String  @unique
-  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String       @id @default(cuid())
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyName String
   taxId       String?
   events      Event[]
@@ -186,6 +292,7 @@ model Post {
   imageUrl  String?
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
+  deletedAt DateTime?
   author    User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   likes     PostLike[]
   comments  PostComment[]
@@ -219,14 +326,14 @@ model PostReaction {
 }
 
 model PostComment {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
   postId    String
   authorId  String
   body      String
   parentId  String?
-  createdAt DateTime @default(now())
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+  post      Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
   parent    PostComment?  @relation("replies", fields: [parentId], references: [id])
   replies   PostComment[] @relation("replies")
 
@@ -253,13 +360,13 @@ model Club {
 }
 
 model ClubMember {
-  id        String   @id @default(cuid())
-  clubId    String
-  userId    String
-  role      String   @default("member")
-  joinedAt  DateTime @default(now())
-  club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id       String   @id @default(cuid())
+  clubId   String
+  userId   String
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+  club     Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([clubId, userId])
   @@index([userId])
@@ -314,8 +421,9 @@ model Message {
 // ─── Courts ──────────────────────────────────────────────────────────────────
 
 model Court {
-  id           String              @id @default(cuid())
+  id           String               @id @default(cuid())
   managerId    String
+  locationId   String?
   name         String
   description  String?
   address      String
@@ -326,27 +434,30 @@ model Court {
   imageUrl     String?
   pricePerHour Float
   surface      String?
-  indoor       Boolean             @default(false)
-  active       Boolean             @default(true)
-  createdAt    DateTime            @default(now())
-  manager      CourtManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  indoor       Boolean              @default(false)
+  active       Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  manager      CourtManagerProfile  @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  location     OrgLocation?         @relation(fields: [locationId], references: [id])
   slots        CourtSlot[]
   bookings     Booking[]
   liveScores   LiveScore[]
 
   @@index([managerId])
   @@index([city])
+  @@index([locationId])
 }
 
 model CourtSlot {
-  id          String         @id @default(cuid())
-  courtId     String
-  startsAt    DateTime
-  endsAt      DateTime
-  available   Boolean        @default(true)
-  recurrence  RecurrenceType @default(NONE)
-  court       Court          @relation(fields: [courtId], references: [id], onDelete: Cascade)
-  booking     Booking?
+  id           String         @id @default(cuid())
+  courtId      String
+  startsAt     DateTime
+  endsAt       DateTime
+  available    Boolean        @default(true)
+  recurrence   RecurrenceType @default(NONE)
+  priceOverride Float?        // peak/off-peak pricing override
+  court        Court          @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  booking      Booking?
 
   @@index([courtId])
   @@index([startsAt])
@@ -360,6 +471,8 @@ model Booking {
   status      BookingStatus @default(PENDING)
   totalAmount Float
   stripeId    String?
+  cancelledAt DateTime?
+  refundedAt  DateTime?
   createdAt   DateTime      @default(now())
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   court       Court         @relation(fields: [courtId], references: [id], onDelete: Cascade)
@@ -373,16 +486,16 @@ model Booking {
 // ─── Live Scores ─────────────────────────────────────────────────────────────
 
 model LiveScore {
-  id         String   @id @default(cuid())
-  courtId    String?
-  player1Id  String
-  player2Id  String?
-  sets       Json     @default("[]")
-  isLive     Boolean  @default(true)
-  startedAt  DateTime @default(now())
-  endedAt    DateTime?
-  court      Court?   @relation(fields: [courtId], references: [id])
-  player1    User     @relation(fields: [player1Id], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  courtId   String?
+  player1Id String
+  player2Id String?
+  sets      Json      @default("[]")
+  isLive    Boolean   @default(true)
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  court     Court?    @relation(fields: [courtId], references: [id])
+  player1   User      @relation(fields: [player1Id], references: [id], onDelete: Cascade)
 
   @@index([player1Id])
   @@index([isLive])
@@ -434,9 +547,12 @@ model Coach {
   languages       String[]
   active          Boolean             @default(true)
   stripeAccountId String?
+  avgRating       Float               @default(0)
+  totalReviews    Int                 @default(0)
   user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   hires           CoachHire[]
   availability    CoachAvailability[]
+  reviews         CoachReview[]
 }
 
 model CoachAvailability {
@@ -459,33 +575,54 @@ model CoachHire {
   totalAmount Float
   stripeId    String?
   notes       String?
+  sessionNotes String?      // coach notes added after session
   createdAt   DateTime      @default(now())
   student     User          @relation("student", fields: [studentId], references: [id], onDelete: Cascade)
   coach       Coach         @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  review      CoachReview?
 
   @@index([studentId])
+  @@index([coachId])
+}
+
+model CoachReview {
+  id        String    @id @default(cuid())
+  coachId   String
+  reviewerId String
+  hireId    String    @unique
+  rating    Int       // 1-5
+  comment   String?
+  createdAt DateTime  @default(now())
+  coach     Coach     @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  reviewer  User      @relation("reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  hire      CoachHire @relation(fields: [hireId], references: [id])
+
   @@index([coachId])
 }
 
 // ─── Events & Tickets ────────────────────────────────────────────────────────
 
 model Event {
-  id          String              @id @default(cuid())
+  id          String               @id @default(cuid())
   managerId   String
+  locationId  String?
   title       String
   description String?
   imageUrl    String?
   location    String
   startsAt    DateTime
   endsAt      DateTime
-  ticketPrice Float               @default(0)
+  ticketPrice Float                @default(0)
   capacity    Int?
-  createdAt   DateTime            @default(now())
-  manager     EventManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime             @default(now())
+  manager     EventManagerProfile  @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  orgLocation OrgLocation?         @relation(fields: [locationId], references: [id])
   tickets     Ticket[]
+  waitlist    EventWaitlist[]
 
   @@index([managerId])
   @@index([startsAt])
+  @@index([locationId])
 }
 
 model Ticket {
@@ -503,19 +640,66 @@ model Ticket {
   @@index([userId])
 }
 
-// ─── Shop ────────────────────────────────────────────────────────────────────
+model EventWaitlist {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  position  Int
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId, position])
+}
+
+// ─── Shop / Marketplace ──────────────────────────────────────────────────────
+
+model Vendor {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  companyName     String
+  logoUrl         String?
+  website         String?
+  stripeAccountId String?
+  commissionPct   Float     @default(0.15) // platform takes 15% by default
+  approved        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products        Product[]
+  payouts         VendorPayout[]
+}
+
+model VendorPayout {
+  id        String   @id @default(cuid())
+  vendorId  String
+  amount    Float
+  stripeId  String?
+  paidAt    DateTime @default(now())
+  vendor    Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+}
 
 model Product {
-  id          String      @id @default(cuid())
-  name        String
-  description String?
-  imageUrl    String?
-  price       Float
-  stock       Int         @default(0)
-  category    String?
-  active      Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  orderItems  OrderItem[]
+  id            String      @id @default(cuid())
+  vendorId      String?
+  name          String
+  description   String?
+  imageUrl      String?
+  price         Float
+  stock         Int         @default(0)
+  category      String?
+  active        Boolean     @default(true)
+  affiliateUrl  String?     // external link if not holding stock
+  commissionPct Float?      // override vendor default
+  createdAt     DateTime    @default(now())
+  vendor        Vendor?     @relation(fields: [vendorId], references: [id])
+  orderItems    OrderItem[]
+
+  @@index([vendorId])
+  @@index([category])
 }
 
 model Order {
@@ -543,6 +727,49 @@ model OrderItem {
   product   Product @relation(fields: [productId], references: [id])
 
   @@index([orderId])
+}
+
+// ─── Ads System ──────────────────────────────────────────────────────────────
+
+model Ad {
+  id           String       @id @default(cuid())
+  advertiserId String
+  orgId        String?
+  title        String
+  imageUrl     String?
+  ctaText      String
+  ctaUrl       String
+  type         AdType
+  status       AdStatus     @default(PENDING_REVIEW)
+  budget       Float
+  spent        Float        @default(0)
+  cpm          Float        @default(5.0) // cost per 1000 impressions
+  targeting    Json         @default("{}") // { city, country, minElo, maxElo, subscription }
+  startsAt     DateTime?
+  endsAt       DateTime?
+  rejectionNote String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  advertiser   User         @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  org          Organization? @relation(fields: [orgId], references: [id])
+  impressions  AdImpression[]
+
+  @@index([advertiserId])
+  @@index([status])
+  @@index([type])
+}
+
+model AdImpression {
+  id        String   @id @default(cuid())
+  adId      String
+  userId    String?
+  clicked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  ad        Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([adId])
+  @@index([createdAt])
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────
@@ -573,4 +800,21 @@ model PushSubscription {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String
+  action     AuditAction
+  targetType String      // "User" | "Ad" | "Vendor" | "Booking" etc.
+  targetId   String
+  meta       Json        @default("{}") // extra context
+  createdAt  DateTime    @default(now())
+  actor      User        @relation("auditActor", fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([createdAt(sort: Desc)])
 }
