@@ -25,7 +25,7 @@
 
 - **Framework:** Next.js 15 (App Router)
 - **Auth:** Clerk
-- **Database:** Prisma + PostgreSQL (Neon or Supabase)
+- **Database:** Prisma + Supabase (PostgreSQL)
 - **Styling:** Tailwind CSS v4
 - **Deployment:** Vercel
 - **Payments:** Stripe
@@ -38,11 +38,22 @@
 npm install
 cp .env.example .env.local
 # Fill in keys — see .env.example for required vars
-npx prisma db push
+npx prisma migrate dev
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+## Supabase setup
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. Go to **Settings → Database → Connection string**
+3. Copy the **Transaction pooler** URL (port 6543) → `DATABASE_URL`
+4. Copy the **Direct connection** URL (port 5432) → `DIRECT_URL`
+5. Add `?pgbouncer=true` to the end of `DATABASE_URL`
+6. Run `npx prisma migrate dev` to push the schema
+
+> **Why two URLs?** Supabase uses PgBouncer (connection pooler) on port 6543. Prisma needs a direct connection for migrations but the pooler for runtime queries in serverless environments like Vercel.
 
 ## Project layout
 
@@ -73,7 +84,12 @@ prisma/
 
 ## Deployment
 
-Push to `main` — Vercel deploys automatically. Set all env vars in Vercel dashboard (never commit `.env.local`).
+Push to `main` — Vercel deploys automatically. Set all env vars in the Vercel dashboard (never commit `.env.local`).
+
+**Required Vercel env vars:**
+- `DATABASE_URL` — Supabase transaction pooler (port 6543)
+- `DIRECT_URL` — Supabase direct connection (port 5432)
+- All Clerk, Stripe, Pusher, Uploadthing keys from `.env.example`
 
 ---
 

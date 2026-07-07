@@ -3,11 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // Transaction pooler (pgBouncer) — runtime
+  directUrl = env("DIRECT_URL")     // Direct connection — migrations only
 }
 
-// ─── Enums ───────────────────────────────────────────────────────────────────
+// ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum Role {
   PLAYER
@@ -43,7 +44,7 @@ enum MatchResult {
   DRAW
 }
 
-// ─── Core User (synced from Clerk webhook) ───────────────────────────────────
+// ─── Core User (synced from Clerk webhook) ────────────────────────────────────
 
 model User {
   id            String   @id // Clerk user ID
@@ -79,7 +80,7 @@ model User {
   postComments     PostComment[]
 }
 
-// ─── Profile Extensions ──────────────────────────────────────────────────────
+// ─── Profile Extensions ───────────────────────────────────────────────────────
 
 model PlayerProfile {
   id          String  @id @default(cuid())
@@ -112,7 +113,7 @@ model EventManagerProfile {
   events      Event[]
 }
 
-// ─── Settings ────────────────────────────────────────────────────────────────
+// ─── Settings ─────────────────────────────────────────────────────────────────
 
 model UserSettings {
   id                    String  @id @default(cuid())
@@ -136,7 +137,7 @@ model UserSettings {
   theme                 String  @default("system") // system | light | dark
 }
 
-// ─── Social ──────────────────────────────────────────────────────────────────
+// ─── Social ───────────────────────────────────────────────────────────────────
 
 model Friendship {
   id          String       @id @default(cuid())
@@ -177,7 +178,7 @@ model Message {
   sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 }
 
-// ─── Feed / Posts ────────────────────────────────────────────────────────────
+// ─── Feed / Posts ─────────────────────────────────────────────────────────────
 
 model Post {
   id        String        @id @default(cuid())
@@ -211,27 +212,27 @@ model PostComment {
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
-// ─── Courts ──────────────────────────────────────────────────────────────────
+// ─── Courts ───────────────────────────────────────────────────────────────────
 
 model Court {
-  id          String              @id @default(cuid())
-  managerId   String
-  name        String
-  description String?
-  address     String
-  city        String
-  country     String
-  lat         Float?
-  lng         Float?
-  imageUrl    String?
+  id           String              @id @default(cuid())
+  managerId    String
+  name         String
+  description  String?
+  address      String
+  city         String
+  country      String
+  lat          Float?
+  lng          Float?
+  imageUrl     String?
   pricePerHour Float
-  surface     String?             // crystal | artificial_grass | concrete
-  indoor      Boolean             @default(false)
-  active      Boolean             @default(true)
-  createdAt   DateTime            @default(now())
-  manager     CourtManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
-  slots       CourtSlot[]
-  bookings    Booking[]
+  surface      String?             // crystal | artificial_grass | concrete
+  indoor       Boolean             @default(false)
+  active       Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  manager      CourtManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  slots        CourtSlot[]
+  bookings     Booking[]
 }
 
 model CourtSlot {
@@ -258,7 +259,7 @@ model Booking {
   slot        CourtSlot     @relation(fields: [slotId], references: [id])
 }
 
-// ─── Scores & Leaderboard ────────────────────────────────────────────────────
+// ─── Scores & Leaderboard ─────────────────────────────────────────────────────
 
 model Score {
   id         String      @id @default(cuid())
@@ -271,33 +272,33 @@ model Score {
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ─── Coaches ─────────────────────────────────────────────────────────────────
+// ─── Coaches ──────────────────────────────────────────────────────────────────
 
 model Coach {
-  id          String      @id @default(cuid())
-  userId      String      @unique
-  bio         String?
+  id           String      @id @default(cuid())
+  userId       String      @unique
+  bio          String?
   pricePerHour Float
   certifications String?
-  active      Boolean     @default(true)
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  hires       CoachHire[]
+  active       Boolean     @default(true)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hires        CoachHire[]
 }
 
 model CoachHire {
-  id        String        @id @default(cuid())
-  studentId String
-  coachId   String
+  id          String        @id @default(cuid())
+  studentId   String
+  coachId     String
   scheduledAt DateTime
-  status    BookingStatus @default(PENDING)
+  status      BookingStatus @default(PENDING)
   totalAmount Float
-  stripeId  String?
-  createdAt DateTime      @default(now())
-  student   User          @relation("student", fields: [studentId], references: [id], onDelete: Cascade)
-  coach     Coach         @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  stripeId    String?
+  createdAt   DateTime      @default(now())
+  student     User          @relation("student", fields: [studentId], references: [id], onDelete: Cascade)
+  coach       Coach         @relation(fields: [coachId], references: [id], onDelete: Cascade)
 }
 
-// ─── Events & Tickets ────────────────────────────────────────────────────────
+// ─── Events & Tickets ─────────────────────────────────────────────────────────
 
 model Event {
   id          String              @id @default(cuid())
@@ -326,7 +327,7 @@ model Ticket {
   user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ─── Shop ────────────────────────────────────────────────────────────────────
+// ─── Shop ─────────────────────────────────────────────────────────────────────
 
 model Product {
   id          String      @id @default(cuid())
@@ -342,15 +343,15 @@ model Product {
 }
 
 model Order {
-  id         String      @id @default(cuid())
-  userId     String
-  status     OrderStatus @default(PENDING)
-  total      Float
-  stripeId   String?
-  address    Json?       // shipping address snapshot
-  createdAt  DateTime    @default(now())
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items      OrderItem[]
+  id        String      @id @default(cuid())
+  userId    String
+  status    OrderStatus @default(PENDING)
+  total     Float
+  stripeId  String?
+  address   Json?       // shipping address snapshot
+  createdAt DateTime    @default(now())
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     OrderItem[]
 }
 
 model OrderItem {
@@ -363,7 +364,7 @@ model OrderItem {
   product   Product @relation(fields: [productId], references: [id])
 }
 
-// ─── Notifications ───────────────────────────────────────────────────────────
+// ─── Notifications ────────────────────────────────────────────────────────────
 
 model Notification {
   id        String   @id @default(cuid())

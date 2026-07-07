@@ -36,12 +36,26 @@ Role is stamped on Clerk `publicMetadata.role` at onboarding and enforced in:
 |---|---|---|
 | Framework | Next.js 15 (App Router) | Deployed on Vercel |
 | Auth | Clerk | `@clerk/nextjs` v6 |
-| DB ORM | Prisma + PostgreSQL | Neon or Supabase |
+| DB | Prisma + Supabase (PostgreSQL) | Two URLs required — see below |
 | Styling | Tailwind CSS v4 | System font — no extra download |
 | Payments | Stripe Checkout | Webhooks for confirmation |
 | Real-time | Pusher | Chat only |
 | Storage | Uploadthing | Avatars, court images, event media |
 | Validation | Zod | Every mutation |
+
+### Supabase / Prisma connection
+
+Supabase uses PgBouncer (connection pooler). Prisma requires two separate URLs:
+
+```
+DATABASE_URL  = Transaction pooler, port 6543, ?pgbouncer=true  ← runtime (Vercel)
+DIRECT_URL    = Direct connection,  port 5432                   ← migrations only
+```
+
+Both are set in `prisma/schema.prisma` as `url` and `directUrl`.
+Both must be set in Vercel environment variables.
+
+**Never** use the direct URL at runtime — it exhausts Supabase connection limits on serverless.
 
 ---
 
