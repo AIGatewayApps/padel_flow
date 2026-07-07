@@ -13,25 +13,22 @@ const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)"]);
 export default clerkMiddleware(async (auth, req) => {
   const { userId, sessionClaims } = await auth();
 
-  // Enforce auth on protected routes
   if (!isPublicRoute(req)) await auth.protect();
 
-  // Redirect unonboarded users to onboarding (except onboarding itself)
+  // Redirect unonboarded users — use !onboarded so undefined (new users) also redirect
   if (userId && !isOnboardingRoute(req) && !isPublicRoute(req)) {
     const onboarded = (sessionClaims?.metadata as { onboarded?: boolean })?.onboarded;
-    // Fallback: check DB if session claim not set yet
-    // (Clerk propagates metadata on next sign-in, so fresh users hit DB once)
-    if (onboarded === false) {
+    if (!onboarded) {
       return NextResponse.redirect(new URL("/onboarding", req.url));
     }
   }
 
   const res = NextResponse.next();
-  // Security headers
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // Allow camera + microphone for QR scanner and video sessions
+  res.headers.set("Permissions-Policy", "camera=(self), microphone=(self), geolocation=()");
   return res;
 });
 

@@ -1,18 +1,51 @@
 import { NextResponse } from "next/server";
+import { Webhook } from "svix";
 import { db } from "@/lib/db";
 
 export async function POST(req: Request) {
-  const payload = await req.json();
-  const evt = payload;
+  const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
+  }
+
+  const svixId = req.headers.get("svix-id");
+  const svixTimestamp = req.headers.get("svix-timestamp");
+  const svixSignature = req.headers.get("svix-signature");
+
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    return NextResponse.json({ error: "Missing svix headers" }, { status: 400 });
+  }
+
+  const body = await req.text();
+
+  let evt: { type: string; data: Record<string, unknown> };
+  try {
+    const wh = new Webhook(webhookSecret);
+    evt = wh.verify(body, {
+      "svix-id": svixId,
+      "svix-timestamp": svixTimestamp,
+      "svix-signature": svixSignature,
+    }) as { type: string; data: Record<string, unknown> };
+  } catch {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
 
   switch (evt.type) {
     case "user.created":
     case "user.updated": {
-      const clerkUser = evt.data;
+      const clerkUser = evt.data as {
+        id: string;
+        email_addresses?: { email_address: string }[];
+        first_name?: string;
+        last_name?: string;
+        username?: string;
+        image_url?: string;
+        public_metadata?: { role?: string };
+        private_metadata?: { pro?: boolean; onboarded?: boolean };
+      };
       const email = clerkUser.email_addresses?.[0]?.email_address ?? "";
-      const role = (clerkUser.public_metadata?.role ?? "PLAYER");
-      const subData = clerkUser.private_metadata as { pro?: boolean };
-      const isPro = subData?.pro === true;
+      const role = clerkUser.public_metadata?.role ?? "PLAYER";
+      const isPro = clerkUser.private_metadata?.pro === true;
 
       await db.user.upsert({
         where: { id: clerkUser.id },
@@ -37,33 +70,33 @@ export async function POST(req: Request) {
       break;
     }
     case "user.deleted": {
-      if (evt.data.id) {
-        await db.user.delete({ where: { id: evt.data.id } }).catch(() => null);
+      const d = evt.data as { id?: string };
+      if (d.id) {
+        await db.user.delete({ where: { id: d.id } }).catch(() => null);
       }
       break;
     }
     case "subscription.created":
     case "subscription.updated": {
-      const subData = evt.data;
-      const clerkUserId = subData.user_id;
-      if (!clerkUserId) break;
-      const status = subData.status;
-      const isPro = status === "active" || status === "trialing";
+      const subData = evt.data as { user_id?: string; status?: string };
+      if (!subData.user_id) break;
+      const isPro = subData.status === "active" || subData.status === "trialing";
       await db.user.update({
-        where: { id: clerkUserId },
+        where: { id: subData.user_id },
         data: { subscription: isPro ? "PRO" : "FREE" },
       });
       break;
     }
     case "subscription.deleted": {
-      const clerkUserId = evt.data.user_id;
-      if (!clerkUserId) break;
+      const d = evt.data as { user_id?: string };
+      if (!d.user_id) break;
       await db.user.update({
-        where: { id: clerkUserId },
+        where: { id: d.user_id },
         data: { subscription: "FREE" },
       });
       break;
     }
   }
+
   return NextResponse.json({ ok: true });
 }

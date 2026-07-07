@@ -80,7 +80,6 @@ model User {
   lastPlayedAt DateTime?
   onboarded    Boolean          @default(false)
   subscription SubscriptionTier @default(FREE)
-  stripeCustomerId String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
@@ -94,7 +93,8 @@ model User {
   messages            Message[]
   bookings            Booking[]
   orders              Order[]
-  scores              Score[]
+  scores              Score[]            @relation("scoreUser")
+  scoresAsOpponent    Score[]            @relation("scoreOpponent")
   coachHires          CoachHire[]        @relation("student")
   eventTickets        Ticket[]
   notifications       Notification[]
@@ -176,6 +176,7 @@ model Friendship {
   receiver    User         @relation("receiver", fields: [receiverId], references: [id], onDelete: Cascade)
 
   @@unique([initiatorId, receiverId])
+  @@index([receiverId])
 }
 
 model Post {
@@ -189,6 +190,9 @@ model Post {
   likes     PostLike[]
   comments  PostComment[]
   reactions PostReaction[]
+
+  @@index([authorId])
+  @@index([createdAt(sort: Desc)])
 }
 
 model PostLike {
@@ -199,17 +203,19 @@ model PostLike {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId])
+  @@index([userId])
 }
 
 model PostReaction {
   id     String @id @default(cuid())
   postId String
   userId String
-  emoji  String // "🎾" | "🔥" | "💪" | "🏆" | "😂"
+  emoji  String
   post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId, emoji])
+  @@index([postId])
 }
 
 model PostComment {
@@ -217,9 +223,15 @@ model PostComment {
   postId    String
   authorId  String
   body      String
+  parentId  String?
   createdAt DateTime @default(now())
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent    PostComment?  @relation("replies", fields: [parentId], references: [id])
+  replies   PostComment[] @relation("replies")
+
+  @@index([postId])
+  @@index([authorId])
 }
 
 // ─── Clubs / Groups ──────────────────────────────────────────────────────────
@@ -236,18 +248,21 @@ model Club {
   owner       User         @relation("owner", fields: [ownerId], references: [id], onDelete: Cascade)
   members     ClubMember[]
   posts       ClubPost[]
+
+  @@index([ownerId])
 }
 
 model ClubMember {
   id        String   @id @default(cuid())
   clubId    String
   userId    String
-  role      String   @default("member") // member | admin | owner
+  role      String   @default("member")
   joinedAt  DateTime @default(now())
   club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([clubId, userId])
+  @@index([userId])
 }
 
 model ClubPost {
@@ -258,6 +273,9 @@ model ClubPost {
   imageUrl  String?
   createdAt DateTime @default(now())
   club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId])
+  @@index([createdAt(sort: Desc)])
 }
 
 // ─── Messages ────────────────────────────────────────────────────────────────
@@ -277,6 +295,7 @@ model ConversationMember {
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
+  @@index([userId])
 }
 
 model Message {
@@ -287,6 +306,9 @@ model Message {
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt(sort: Desc)])
 }
 
 // ─── Courts ──────────────────────────────────────────────────────────────────
@@ -311,6 +333,9 @@ model Court {
   slots        CourtSlot[]
   bookings     Booking[]
   liveScores   LiveScore[]
+
+  @@index([managerId])
+  @@index([city])
 }
 
 model CourtSlot {
@@ -322,6 +347,9 @@ model CourtSlot {
   recurrence  RecurrenceType @default(NONE)
   court       Court          @relation(fields: [courtId], references: [id], onDelete: Cascade)
   booking     Booking?
+
+  @@index([courtId])
+  @@index([startsAt])
 }
 
 model Booking {
@@ -336,6 +364,10 @@ model Booking {
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   court       Court         @relation(fields: [courtId], references: [id], onDelete: Cascade)
   slot        CourtSlot     @relation(fields: [slotId], references: [id])
+
+  @@index([userId])
+  @@index([courtId])
+  @@index([status])
 }
 
 // ─── Live Scores ─────────────────────────────────────────────────────────────
@@ -351,6 +383,9 @@ model LiveScore {
   endedAt    DateTime?
   court      Court?   @relation(fields: [courtId], references: [id])
   player1    User     @relation(fields: [player1Id], references: [id], onDelete: Cascade)
+
+  @@index([player1Id])
+  @@index([isLive])
 }
 
 // ─── Scores & Leaderboard ────────────────────────────────────────────────────
@@ -363,7 +398,12 @@ model Score {
   result     MatchResult
   courtId    String?
   playedAt   DateTime    @default(now())
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User        @relation("scoreUser", fields: [userId], references: [id], onDelete: Cascade)
+  opponent   User?       @relation("scoreOpponent", fields: [opponentId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([opponentId])
+  @@index([playedAt(sort: Desc)])
 }
 
 model MatchChallenge {
@@ -377,6 +417,9 @@ model MatchChallenge {
   createdAt    DateTime        @default(now())
   challenger   User            @relation("challenger", fields: [challengerId], references: [id], onDelete: Cascade)
   challenged   User            @relation("challenged", fields: [challengedId], references: [id], onDelete: Cascade)
+
+  @@index([challengerId])
+  @@index([challengedId])
 }
 
 // ─── Coaches ─────────────────────────────────────────────────────────────────
@@ -403,6 +446,8 @@ model CoachAvailability {
   startHour Int
   endHour   Int
   coach     Coach  @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([coachId])
 }
 
 model CoachHire {
@@ -417,6 +462,9 @@ model CoachHire {
   createdAt   DateTime      @default(now())
   student     User          @relation("student", fields: [studentId], references: [id], onDelete: Cascade)
   coach       Coach         @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([coachId])
 }
 
 // ─── Events & Tickets ────────────────────────────────────────────────────────
@@ -435,6 +483,9 @@ model Event {
   createdAt   DateTime            @default(now())
   manager     EventManagerProfile @relation(fields: [managerId], references: [id], onDelete: Cascade)
   tickets     Ticket[]
+
+  @@index([managerId])
+  @@index([startsAt])
 }
 
 model Ticket {
@@ -442,11 +493,14 @@ model Ticket {
   eventId   String
   userId    String
   stripeId  String?
-  qrCode    String?
+  qrCode    String?  @unique
   scanned   Boolean  @default(false)
   createdAt DateTime @default(now())
   event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([userId])
 }
 
 // ─── Shop ────────────────────────────────────────────────────────────────────
@@ -474,6 +528,9 @@ model Order {
   createdAt DateTime    @default(now())
   user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   items     OrderItem[]
+
+  @@index([userId])
+  @@index([status])
 }
 
 model OrderItem {
@@ -484,6 +541,8 @@ model OrderItem {
   price     Float
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────
@@ -497,6 +556,9 @@ model Notification {
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
 }
 
 // ─── Push Subscriptions ──────────────────────────────────────────────────────
@@ -509,18 +571,6 @@ model PushSubscription {
   auth      String
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
 
-// ─── Subscriptions ───────────────────────────────────────────────────────────
-
-model UserSubscription {
-  id                 String           @id @default(cuid())
-  userId             String           @unique
-  tier               SubscriptionTier @default(FREE)
-  stripeSubscriptionId String?
-  stripePriceId      String?
-  currentPeriodEnd   DateTime?
-  cancelAtPeriodEnd  Boolean          @default(false)
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  @@index([userId])
 }

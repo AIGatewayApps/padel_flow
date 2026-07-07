@@ -9,32 +9,52 @@ export async function GET(req: Request) {
 
   const recurringSlots = await db.courtSlot.findMany({
     where: { recurrence: { in: ["WEEKLY", "BIWEEKLY"] } },
-    include: { court: { select: { id: true } } },
   });
 
-  let created = 0;
-  for (const slot of recurringSlots) {
+  if (recurringSlots.length === 0) {
+    return NextResponse.json({ ok: true, slotsCreated: 0 });
+  }
+
+  // Compute all candidate next-week datetimes upfront
+  const candidates = recurringSlots.map(slot => {
     const newStart = new Date(slot.startsAt);
     newStart.setDate(newStart.getDate() + 7);
     const newEnd = new Date(slot.endsAt);
     newEnd.setDate(newEnd.getDate() + 7);
+    return { slot, newStart, newEnd };
+  });
 
-    const exists = await db.courtSlot.findFirst({
-      where: { courtId: slot.courtId, startsAt: newStart },
+  // Batch-check which slots already exist
+  const existingSlots = await db.courtSlot.findMany({
+    where: {
+      OR: candidates.map(c => ({
+        courtId: c.slot.courtId,
+        startsAt: c.newStart,
+      })),
+    },
+    select: { courtId: true, startsAt: true },
+  });
+
+  const existingKeys = new Set(
+    existingSlots.map(s => `${s.courtId}::${s.startsAt.toISOString()}`)
+  );
+
+  const toCreate = candidates.filter(
+    c => !existingKeys.has(`${c.slot.courtId}::${c.newStart.toISOString()}`)
+  );
+
+  if (toCreate.length > 0) {
+    await db.courtSlot.createMany({
+      data: toCreate.map(c => ({
+        courtId: c.slot.courtId,
+        startsAt: c.newStart,
+        endsAt: c.newEnd,
+        available: true,
+        recurrence: c.slot.recurrence,
+      })),
+      skipDuplicates: true,
     });
-    if (!exists) {
-      await db.courtSlot.create({
-        data: {
-          courtId: slot.courtId,
-          startsAt: newStart,
-          endsAt: newEnd,
-          available: true,
-          recurrence: slot.recurrence,
-        },
-      });
-      created++;
-    }
   }
 
-  return NextResponse.json({ ok: true, slotsCreated: created });
+  return NextResponse.json({ ok: true, slotsCreated: toCreate.length });
 }

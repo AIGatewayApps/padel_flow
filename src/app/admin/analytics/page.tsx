@@ -13,7 +13,8 @@ export default async function AdminAnalyticsPage() {
 
   const [
     totalUsers, totalCourts, totalBookings, totalEvents, totalTickets,
-    totalOrders, totalPosts, totalClubs, totalCoaches,
+    totalOrders, totalPosts, totalClubs, totalCoaches, proUsers,
+    bookingRevenue, orderRevenue, coachRevenue,
   ] = await Promise.all([
     db.user.count(),
     db.court.count(),
@@ -24,14 +25,16 @@ export default async function AdminAnalyticsPage() {
     db.post.count(),
     db.club.count(),
     db.coach.count(),
+    db.user.count({ where: { subscription: "PRO" } }),
+    db.booking.aggregate({ where: { status: "CONFIRMED" }, _sum: { totalAmount: true } }),
+    db.order.aggregate({ where: { status: "PAID" }, _sum: { total: true } }),
+    db.coachHire.aggregate({ where: { status: "CONFIRMED" }, _sum: { totalAmount: true } }),
   ]);
 
-  const bookingRevenue = await db.booking.aggregate({ where: { status: "CONFIRMED" }, _sum: { totalAmount: true } });
-  const orderRevenue = await db.order.aggregate({ where: { status: "PAID" }, _sum: { total: true } });
-  const coachRevenue = await db.coachHire.aggregate({ where: { status: "CONFIRMED" }, _sum: { totalAmount: true } });
-  const totalRevenue = (bookingRevenue._sum.totalAmount ?? 0) + (orderRevenue._sum.total ?? 0) + (coachRevenue._sum.totalAmount ?? 0);
-
-  const proUsers = await db.user.count({ where: { subscription: "PRO" } });
+  const totalRevenue =
+    (bookingRevenue._sum.totalAmount ?? 0) +
+    (orderRevenue._sum.total ?? 0) +
+    (coachRevenue._sum.totalAmount ?? 0);
 
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -58,7 +61,6 @@ export default async function AdminAnalyticsPage() {
         <h1 className="text-2xl font-bold">Admin Analytics</h1>
         <p className="text-gray-500 text-sm mt-1">Platform overview</p>
       </div>
-
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {stats.map(stat => (
           <div key={stat.label} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-4">

@@ -1,87 +1,56 @@
 # Changelog
 
+## 2026-07-07 - v6: Security, performance & schema fixes
+
+### Security
+- Clerk webhook now verifies svix signature using CLERK_WEBHOOK_SECRET — rejects unsigned/forged requests
+- Middleware onboarded check fixed: `!onboarded` instead of `=== false` so new users (undefined) redirect correctly
+- Permissions-Policy header updated: `camera=(self), microphone=(self)` — was blocking QR scanner and video sessions
+
+### Schema
+- Removed orphaned `UserSubscription` model (replaced by Clerk Billing + User.subscription field)
+- Removed orphaned `stripeCustomerId` field from User
+- Added proper `Score.opponent` relation to User (`scoreOpponent`) — was a plain String with no FK
+- Added `PostComment.parentId` + self-relation for threaded replies — parentId was silently ignored before
+- Added `Ticket.qrCode @unique` constraint
+- Added DB indexes across all heavily-queried FK columns:
+  - Booking: userId, courtId, status
+  - Score: userId, opponentId, playedAt
+  - Notification: userId, read
+  - Message: conversationId, createdAt
+  - Post: authorId, createdAt
+  - PostComment: postId, authorId
+  - CourtSlot: courtId, startsAt
+  - Ticket: eventId, userId
+  - Order: userId, status
+  - MatchChallenge: challengerId, challengedId
+  - And more across all models
+
+### Performance
+- Leaderboard wrapped in `unstable_cache` with 5-minute revalidation — no longer hits DB on every page load
+- Recurring slots cron: replaced N+1 loop with batch `findMany` existence check + `createMany` — was 1000+ queries, now ~3
+- Admin analytics: all 13 DB queries now in a single `Promise.all` — eliminated sequential revenue aggregates
+
+### Rate limiting
+- `createComment`: max 10 per user per minute (in-memory)
+- `createPost`: max 5 per user per minute (in-memory)
+
+### UX
+- ThemeToggle now uses proper SVG sun/moon icons instead of text labels
+- Added `loading.tsx` skeleton screens for: leaderboard, feed, courts, dashboard
+
 ## 2026-07-07 - v5: Clerk Billing, all portals, all remaining features
-
-### Clerk Billing (replaces Stripe subscription)
-- Subscriptions now managed through Clerk Billing, no direct Stripe checkout
-- /api/webhooks/clerk/route.ts handles subscription.created, subscription.updated, subscription.deleted events
-- Pro page uses openBilling() from Clerk client SDK
-- syncSubscriptionFromClerk() updates DB User.subscription field
-- Plans configured in Clerk Dashboard under Billing > Subscription Plans
-
-### Court Manager Portal (/court-manager-portal)
-- Dashboard: total courts, total bookings, revenue aggregate
-- Court list with slot management links
-- Create court from portal
-- Full onboarding flow: company details, first court, done
-
-### Event Manager Portal (/event-manager-portal)
-- Dashboard: total events, upcoming count, tickets sold
-- Upcoming events with ticket counts and scan links
-- Past events section
-- Full onboarding flow: company details, first event, done
-
-### Onboarding flows (all roles)
-- PLAYER: welcome, playing style, location, done
-- COACH: welcome, coach profile, done
-- COURT_MANAGER: welcome, company, first court, done
-- EVENT_MANAGER: welcome, company, first event, done
-- completeOnboarding() creates role-specific profile + first entity
-- Syncs onboarded: true to Clerk private metadata
-
-### Dark mode
-- ThemeProvider component reads localStorage + system preference
-- ThemeToggle component sun/moon toggle button
-- globals.css updated with color-scheme + transition classes
-- Settings theme field already in schema
-
-### Recurring slot cron job
-- vercel.json configured with weekly cron: 0 2 * * 0 to /api/cron/recurring-slots
-- Cron route generates next weeks slots from recurrence: WEEKLY slots
-- Secured with CRON_SECRET bearer token
-- Streak decay cron: daily 0 3 * * * resets streaks for 2+ day inactivity
-
-### iOS QR scanner fallback
-- BarcodeDetector API used on Chrome/Android
-- Falls back to @zxing/browser on iOS Safari
-- Error state for camera permission denied
-
-### Coach video sessions
-- createVideoSession() creates Daily.co private room via API
-- getVideoUrl() fetches existing room or creates new
-- /coach-portal/video/[hireId] embeds iframe + join link
-- 1 hour expiry from scheduled time
-
-### Streak leaderboard tab
-- /leaderboard now shows activity streaks section below Elo rankings
-- Top 20 streaks displayed
-
-### Club leaderboard
-- /clubs/[id] shows ranked members by Elo in sidebar
-- Top 10 club members with rank, avatar, Elo
-
-### Comment replies (threaded)
-- createComment server action supports parentId field
-- PostComment schema already has structure for threading
-- Notifies post author on comment
-
-### Match result sharing
-- shareResultToFeed() creates a post from a Score record
-- Includes set summary (6-3, 4-6, 7-5) and result emoji
-- Accessible after endLiveScore
-
-### Admin analytics dashboard
-- /admin/analytics 12 stat cards: users, Pro subs, new this week, courts, bookings, events, tickets, orders, posts, clubs, coaches, revenue
-- Revenue aggregates from bookings + orders + coach hires
-- Restricted to ADMIN role
+- Subscriptions via Clerk Billing, Court/Event Manager portals, dark mode
+- Onboarding flows for all 4 roles, recurring slot crons, streak decay
+- Coach video sessions (Daily.co), QR scanner iOS fallback
+- Streak + club leaderboards, comment replies, match result sharing
+- Admin analytics dashboard
 
 ## 2026-07-07 - v4: All features built
 - Post reactions, clubs, live scores, PWA push, Pro page, QR scanner, court calendar, AI suggestions
-- Schema v3: PostReaction, Club, LiveScore, PushSubscription, UserSubscription, RecurrenceType
 
 ## 2026-07-07 - v3: Best practices, coach portal, onboarding
 - Security headers, Supabase Realtime, rate limiting, error boundaries, PWA manifest
-- Coach portal with availability editor, Elo ratings, streaks, challenges, leaderboard
 
 ## 2026-07-07 - v2: Server actions, responsive UI
 - All mutations moved to Server Actions, mobile nav, useTransition everywhere
