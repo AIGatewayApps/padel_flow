@@ -1,31 +1,28 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRef, useTransition } from "react";
+import { createPost } from "@/lib/actions/post.actions";
 
 export default function PostComposer() {
-  const [body, setBody] = useState("");
-  const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const ref = useRef<HTMLFormElement>(null);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!body.trim()) return;
-    setLoading(true);
-    await fetch("/api/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }) });
-    setBody("");
-    setLoading(false);
-    router.refresh();
+  function action(formData: FormData) {
+    if (!formData.get("body")?.toString().trim()) return;
+    startTransition(async () => {
+      await createPost(formData);
+      ref.current?.reset();
+    });
   }
 
   return (
-    <form onSubmit={submit} className="bg-white dark:bg-gray-900 border rounded-xl p-4 flex flex-col gap-3">
-      <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="What's happening on the court?"
-        rows={3} maxLength={1000} className="resize-none border rounded-lg p-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
-      <div className="flex justify-between items-center">
-        <span className="text-xs text-gray-400">{body.length}/1000</span>
-        <button type="submit" disabled={loading || !body.trim()}
-          className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
-          {loading ? "Posting..." : "Post"}
+    <form ref={ref} action={action} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-4">
+      <textarea name="body" required placeholder="What's happening on the court? 🎾"
+        rows={3} maxLength={1000}
+        className="w-full resize-none text-sm border-0 outline-none bg-transparent placeholder-gray-400 dark:text-gray-200" />
+      <div className="flex justify-end mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+        <button type="submit" disabled={isPending}
+          className="bg-green-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
+          {isPending ? "Posting..." : "Post"}
         </button>
       </div>
     </form>
