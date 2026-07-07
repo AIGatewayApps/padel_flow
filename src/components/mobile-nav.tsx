@@ -1,42 +1,38 @@
 "use client";
-import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
-type NavLink = { href: string; label: string; accent?: boolean; danger?: boolean };
+const tabs = [
+  { href: "/dashboard", label: "Home", icon: "⊞" },
+  { href: "/courts",    label: "Courts", icon: "🎾" },
+  { href: "/feed",      label: "Feed", icon: "📣" },
+  { href: "/scores",   label: "Scores", icon: "📊" },
+  { href: "/messages", label: "Chat", icon: "💬" },
+];
 
-export default function MobileNav({ links }: { links: NavLink[] }) {
-  const [open, setOpen] = useState(false);
+export default function MobileNav() {
+  const pathname = usePathname();
   return (
-    <div className="lg:hidden">
-      <button onClick={() => setOpen(p => !p)} aria-label="Menu"
-        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-        <div className="w-5 flex flex-col gap-1">
-          <span className={`block h-0.5 bg-gray-600 transition-all duration-200 ${open ? "rotate-45 translate-y-1.5" : ""}`} />
-          <span className={`block h-0.5 bg-gray-600 transition-all duration-200 ${open ? "opacity-0" : ""}`} />
-          <span className={`block h-0.5 bg-gray-600 transition-all duration-200 ${open ? "-rotate-45 -translate-y-1.5" : ""}`} />
-        </div>
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setOpen(false)} />
-          <nav className="fixed top-14 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 z-50 p-4 grid grid-cols-3 gap-2 max-h-[80vh] overflow-y-auto">
-            {links.map(l => (
-              <Link key={l.href} href={l.href} onClick={() => setOpen(false)}
-                className={`flex items-center justify-center py-3 px-2 rounded-xl text-sm font-medium text-center transition-colors ${
-                  l.danger ? "bg-red-50 text-red-600" :
-                  l.accent ? "bg-green-50 text-green-700" :
-                  "bg-gray-50 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200"
-                }`}>
-                {l.label}
-              </Link>
-            ))}
-            <Link href="/settings" onClick={() => setOpen(false)}
-              className="flex items-center justify-center py-3 px-2 rounded-xl text-sm font-medium bg-gray-50 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200">
-              Settings
+    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur-md">
+      <div className="flex h-16 items-center justify-around px-2">
+        {tabs.map(tab => {
+          const active = pathname === tab.href || (tab.href !== "/dashboard" && pathname.startsWith(tab.href));
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-center transition-colors ${
+                active ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"
+              }`}
+              aria-current={active ? "page" : undefined}
+            >
+              <span className="text-xl leading-none" role="img" aria-hidden>{tab.icon}</span>
+              <span className="text-[10px] font-medium">{tab.label}</span>
+              {active && <span className="h-0.5 w-4 rounded-full bg-[var(--color-primary)] mt-0.5" />}
             </Link>
-          </nav>
-        </>
-      )}
-    </div>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
