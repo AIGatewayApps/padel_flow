@@ -64,39 +64,61 @@ Both must be set in Vercel environment variables.
 ```
 src/
   app/
-    (auth)/            # Clerk sign-in / sign-up
-    onboarding/        # First-run role selection
-    dashboard/         # Authenticated home
-    feed/              # Social feed
-    friends/           # Friend requests + list
-    courts/            # Browse + detail + booking
-    scores/            # Log + history
-    leaderboard/       # Top players
-    coaches/           # Coach directory + hire
-    events/            # Browse + detail + tickets
-    shop/              # Products + cart + checkout
-    messages/          # Conversations
-    settings/          # All settings in one place
+    (auth)/                   # Clerk sign-in / sign-up
+    onboarding/               # First-run role selection
+    dashboard/                # Authenticated home
+    feed/                     # Social feed ✅ BUILT
+      page.tsx
+      post-card.tsx
+      post-composer.tsx
+      like-button.tsx
+      loading.tsx
+    friends/                  # Friend requests + player search ✅ BUILT
+      page.tsx
+      friend-actions.tsx
+      player-search.tsx
+    courts/                   # Browse + detail + booking
+    scores/                   # Log + history
+    leaderboard/              # Top players
+    coaches/                  # Coach directory + hire
+    events/                   # Browse + detail + tickets
+    shop/                     # Products + cart + checkout
+    messages/                 # Conversations
+    settings/                 # All settings in one place
+    notifications/            # ✅ EXISTS (not in original spec)
+    players/                  # Public player profiles ✅ EXISTS
+    bookings/                 # Booking confirmation ✅ EXISTS
+    challenges/               # ✅ EXISTS (not in original spec)
+    clubs/                    # ✅ EXISTS (not in original spec)
+    live/                     # ✅ EXISTS (not in original spec)
+    ads/                      # ✅ EXISTS (not in original spec)
+    ai-suggest/               # ✅ EXISTS (not in original spec)
+    pro/                      # ✅ EXISTS (not in original spec)
+    vendor/                   # ✅ EXISTS (not in original spec)
+    org/                      # ✅ EXISTS (not in original spec)
     manage/
-      courts/          # COURT_MANAGER only
-      events/          # EVENT_MANAGER only
-    admin/             # ADMIN only — users, store, orders
+      courts/                 # COURT_MANAGER only
+      events/                 # EVENT_MANAGER only
+    coach-portal/             # ✅ EXISTS — role-specific portal
+    court-manager-portal/     # ✅ EXISTS — role-specific portal
+    event-manager-portal/     # ✅ EXISTS — role-specific portal
+    admin/                    # ADMIN only — users, store, orders
     api/
-      bookings/        # POST — create booking + Stripe session
-      scores/          # POST — log match
-      settings/        # PATCH — save user settings
-      onboarding/      # POST — create DB user + set Clerk role
+      bookings/               # POST — create booking + Stripe session
+      scores/                 # POST — log match
+      settings/               # PATCH — save user settings
+      onboarding/             # POST — create DB user + set Clerk role
       webhooks/
-        clerk/         # Clerk user events
-        stripe/        # Payment confirmations
-  components/          # Shared UI (future: extract here)
+        clerk/                # Clerk user events
+        stripe/               # Payment confirmations
+  components/                 # Shared UI (future: extract here)
   lib/
-    db.ts              # Prisma singleton
-    auth.ts            # getDbUser, requireRole, upsertUserFromClerk
-    stripe.ts          # Stripe singleton
-    validations.ts     # Zod schemas
+    db.ts                     # Prisma singleton
+    auth.ts                   # getDbUser, requireRole, upsertUserFromClerk
+    stripe.ts                 # Stripe singleton
+    validations.ts            # Zod schemas
 prisma/
-  schema.prisma        # Full data model
+  schema.prisma               # Full data model
 ```
 
 ---
@@ -129,21 +151,59 @@ Security, data-loss prevention, and accessibility are never skipped.
 
 ---
 
-## Pages still to build (open workstream)
+## Pages built (confirmed in repo — audited 2026-07-07)
 
-- `app/feed/` — social feed + post composer
-- `app/friends/` — friend requests + player search
-- `app/coaches/` — coach directory + hire flow
-- `app/shop/` — product listing + cart + checkout
-- `app/messages/` — Pusher-powered conversations
-- `app/players/[username]/` — public player profile
-- `app/bookings/[id]/` — booking confirmation
-- `app/manage/courts/new` and `[id]` — court CRUD
-- `app/manage/events/new` and `[id]` — event CRUD
-- `app/events/[id]/` — event detail + ticket purchase
-- `app/admin/users`, `products`, `orders` — admin sub-pages
-- Uploadthing integration for avatars + media
-- Pusher integration for real-time chat
+| Route | Status | Notes |
+|---|---|---|
+| `(auth)/` | ✅ Built | Clerk sign-in / sign-up |
+| `onboarding/` | ✅ Built | Role selection |
+| `dashboard/` | ✅ Built | Authenticated home |
+| `feed/` | ✅ Built | post-card, post-composer, like-button, loading |
+| `friends/` | ✅ Built | friend-actions, player-search |
+| `courts/` | ✅ Exists | internal completeness unaudited |
+| `scores/` | ✅ Exists | internal completeness unaudited |
+| `leaderboard/` | ✅ Exists | internal completeness unaudited |
+| `coaches/` | ✅ Exists | internal completeness unaudited |
+| `events/` | ✅ Exists | internal completeness unaudited |
+| `shop/` | ✅ Exists | internal completeness unaudited |
+| `messages/` | ✅ Exists | Pusher wiring unconfirmed |
+| `settings/` | ✅ Exists | internal completeness unaudited |
+| `notifications/` | ✅ Exists | not in original spec |
+| `players/` | ✅ Exists | public player profiles |
+| `bookings/` | ✅ Exists | confirmation page |
+| `challenges/` | ✅ Exists | not in original spec |
+| `clubs/` | ✅ Exists | not in original spec |
+| `live/` | ✅ Exists | not in original spec |
+| `ads/` | ✅ Exists | not in original spec |
+| `ai-suggest/` | ✅ Exists | not in original spec |
+| `pro/` | ✅ Exists | not in original spec |
+| `vendor/` | ✅ Exists | not in original spec |
+| `org/` | ✅ Exists | not in original spec |
+| `coach-portal/` | ✅ Exists | role-specific portal |
+| `court-manager-portal/` | ✅ Exists | role-specific portal |
+| `event-manager-portal/` | ✅ Exists | role-specific portal |
+| `manage/` | ✅ Exists | courts + events sub-routes |
+| `admin/` | ✅ Exists | sub-pages unaudited |
+
+---
+
+## Still to verify / complete
+
+These directories exist but their internal completeness has NOT been audited:
+
+- `app/courts/` — confirm `[id]/` detail + booking slot UI wired to API
+- `app/coaches/` — confirm hire flow + coach profile
+- `app/shop/` — confirm cart state, checkout → Stripe session, success redirect
+- `app/messages/` — confirm Pusher wiring, real-time delivery
+- `app/events/[id]/` — confirm ticket purchase flow
+- `app/admin/users`, `products`, `orders` — confirm sub-pages exist
+- `app/manage/courts/new` and `[id]` — confirm CRUD forms
+- `app/manage/events/new` and `[id]` — confirm CRUD forms
+- `app/bookings/[id]/` — confirm confirmation page content
+- `app/players/[username]/` — confirm public profile render
+- Uploadthing integration for avatars + media — confirm wired
+- Pusher integration for real-time chat — confirm wired
+- `ads/`, `live/`, `ai-suggest/`, `pro/`, `vendor/`, `org/`, `clubs/`, `challenges/` — need product decisions on scope/access control
 
 ---
 
@@ -153,3 +213,11 @@ Security, data-loss prevention, and accessibility are never skipped.
 - No rate limiting on API routes yet — add Upstash Ratelimit when needed
 - No pagination on leaderboard / courts / events — add cursor pagination when lists grow
 - Stripe currency is hard-coded USD — make configurable when international rollout begins
+
+---
+
+## Changelog
+
+| Date | Change |
+|---|---|
+| 2026-07-07 | CLAUDE.md synced with actual repo — 14 new undocumented directories discovered, "pages still to build" replaced with verified status table |
