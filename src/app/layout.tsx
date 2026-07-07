@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
+import Nav from "@/components/nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,7 +13,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
-        <body>{children}</body>
+        <body className="min-h-screen bg-gray-50 dark:bg-gray-950">
+          <Nav />
+          <main className="max-w-6xl mx-auto px-4 py-8">{children}</main>
+        </body>
       </html>
     </ClerkProvider>
   );
