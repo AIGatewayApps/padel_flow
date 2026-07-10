@@ -36,3 +36,12 @@ export const challengeRatelimit = redis
       prefix: "pf:challenge",
     })
   : null;
+
+/** 30 live-score updates per 10 seconds per user */
+export const liveScoreRatelimit = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(30, "10 s"),
+      prefix: "pf:livescore",
+    })
+  : null;

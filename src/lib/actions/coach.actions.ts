@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { z } from "zod";
+import type { ActionResult } from "@/lib/types";
 
 const CoachProfileSchema = z.object({
   bio: z.string().max(1000).nullish(),
@@ -12,18 +13,14 @@ const CoachProfileSchema = z.object({
   active: z.boolean().optional(),
 });
 
-export type ActionResult<T = void> =
-  | { success: true; data: T }
-  | { success: false; error: string; code?: string };
-
 export async function updateCoachProfile(
   formData: FormData
 ): Promise<ActionResult> {
-  const { userId } = await auth();
-  if (!userId)
+  const { userId: clerkId } = await auth();
+  if (!clerkId)
     return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
-  const coach = await db.coach.findUnique({ where: { userId } });
+  const coach = await db.coach.findUnique({ where: { userId: clerkId } });
   if (!coach)
     return { success: false, error: "No coach profile", code: "NOT_FOUND" };
 
@@ -42,7 +39,7 @@ export async function updateCoachProfile(
     };
 
   await db.coach.update({
-    where: { userId },
+    where: { userId: clerkId },
     data: {
       bio: result.data.bio ?? null,
       pricePerHour: result.data.pricePerHour,
@@ -67,12 +64,12 @@ export async function upsertAvailability(
   coachId: string,
   slots: { dayOfWeek: number; startHour: number; endHour: number }[]
 ): Promise<ActionResult> {
-  const { userId } = await auth();
-  if (!userId)
+  const { userId: clerkId } = await auth();
+  if (!clerkId)
     return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
   const coach = await db.coach.findUnique({ where: { id: coachId } });
-  if (!coach || coach.userId !== userId)
+  if (!coach || coach.userId !== clerkId)
     return { success: false, error: "Forbidden", code: "FORBIDDEN" };
 
   const result = AvailSchema.safeParse(slots);
@@ -83,15 +80,12 @@ export async function upsertAvailability(
       code: "VALIDATION_ERROR",
     };
 
-  const parsed = result.data;
-
-  // Atomic: delete existing + create new in a single transaction
   await db.$transaction([
     db.coachAvailability.deleteMany({ where: { coachId } }),
-    ...(parsed.length > 0
+    ...(result.data.length > 0
       ? [
           db.coachAvailability.createMany({
-            data: parsed.map((s) => ({ coachId, ...s })),
+            data: result.data.map((s) => ({ coachId, ...s })),
           }),
         ]
       : []),

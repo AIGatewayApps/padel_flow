@@ -15,12 +15,12 @@ const CommentSchema = z.object({
 export async function createComment(
   formData: FormData
 ): Promise<ActionResult> {
-  const { userId } = await auth();
-  if (!userId)
+  const { userId: clerkId } = await auth();
+  if (!clerkId)
     return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
   if (postRatelimit) {
-    const { success } = await postRatelimit.limit(userId);
+    const { success } = await postRatelimit.limit(clerkId);
     if (!success)
       return {
         success: false,
@@ -44,10 +44,17 @@ export async function createComment(
 
   const parsed = result.data;
 
+  const dbUser = await db.user.findUnique({
+    where: { clerkId },
+    select: { id: true },
+  });
+  if (!dbUser)
+    return { success: false, error: "User not found", code: "NOT_FOUND" };
+
   await db.postComment.create({
     data: {
       postId: parsed.postId,
-      authorId: userId,
+      authorId: dbUser.id,
       body: parsed.body,
       parentId: parsed.parentId ?? null,
     },
@@ -58,7 +65,7 @@ export async function createComment(
     select: { authorId: true },
   });
 
-  if (post && post.authorId !== userId) {
+  if (post && post.authorId !== dbUser.id) {
     await db.notification.create({
       data: {
         userId: post.authorId,
