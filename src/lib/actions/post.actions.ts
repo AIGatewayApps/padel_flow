@@ -4,33 +4,46 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { postRatelimit } from "@/lib/ratelimit";
 import { postSchema } from "@/lib/validations";
+import type { ActionResult } from "@/lib/types";
 
-export async function createPost(formData: FormData) {
+export async function createPost(formData: FormData): Promise<ActionResult> {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId) return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
-  // Rate limit via Upstash Redis — works across all serverless instances
   if (postRatelimit) {
     const { success } = await postRatelimit.limit(userId);
-    if (!success) throw new Error("Too many posts. Please slow down.");
+    if (!success)
+      return { success: false, error: "Too many posts. Please slow down.", code: "RATE_LIMITED" };
   }
 
-  const parsed = postSchema.parse({
+  const parseResult = postSchema.safeParse({
     body: formData.get("body"),
     imageUrl: formData.get("imageUrl") || undefined,
   });
 
+  if (!parseResult.success)
+    return {
+      success: false,
+      error: parseResult.error.errors[0]?.message ?? "Invalid input",
+      code: "VALIDATION_ERROR",
+    };
+
   await db.post.create({
-    data: { authorId: userId, body: parsed.body, imageUrl: parsed.imageUrl },
+    data: { authorId: userId, body: parseResult.data.body, imageUrl: parseResult.data.imageUrl },
   });
   revalidatePath("/feed");
+  return { success: true, data: undefined };
 }
 
-export async function deletePost(postId: string) {
+export async function deletePost(postId: string): Promise<ActionResult> {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId) return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
+
   const post = await db.post.findUnique({ where: { id: postId }, select: { authorId: true } });
-  if (!post || post.authorId !== userId) throw new Error("Forbidden");
+  if (!post || post.authorId !== userId)
+    return { success: false, error: "Forbidden", code: "FORBIDDEN" };
+
   await db.post.delete({ where: { id: postId } });
   revalidatePath("/feed");
+  return { success: true, data: undefined };
 }

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { db } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   const placement = req.nextUrl.searchParams.get('placement') ?? 'banner'
 
-  const ad = await prisma.ad.findFirst({
+  const ad = await db.ad.findFirst({
     where: {
       status: 'ACTIVE',
       placement,

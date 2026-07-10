@@ -1,5 +1,27 @@
 # PadelFlow Changelog
 
+## [0.7.3] - 2026-07-10
+
+### Fixed (Critical 🔴 — Security)
+- **`ads.actions.ts`** — Added `auth()` guard on all exports. `createAd` and `updateAdStatus` now verify the caller is the owning vendor (`vendor.userId === dbUser.id`) or `SUPER_ADMIN` before mutating. Previously any request could create or modify ads without authentication.
+- **`vendor.actions.ts`** — Removed `clerkId` parameter from `getVendorProfile`, `getVendorProducts`, and `createProduct`. Caller identity is now always derived from `auth()` server-side, preventing one vendor from operating as another by passing a spoofed ID.
+- **`org.actions.ts`** — All read queries (`getOrgById`, `getOrgMembers`, `getOrgCourts`, `getOrgRevenue`) now run `auth()` + `hasOrgAccess(userId, orgId)` before returning data. Previously any authenticated (or unauthenticated) request could enumerate members and revenue for any org.
+- **`ticket.actions.ts`** — Replaced legacy `event.manager.userId` ownership check (dead — `Event` has no `managerId`) with `requireOrgRole(userId, event.orgId, ["ORG_ADMIN"])`. All events are now org-owned; the old path would have thrown `Forbidden` for every org-managed event.
+
+### Fixed (High Priority 🟠 — Bugs)
+- **`onboarding.actions.ts`** — `playerProfile` and `coach` upserts now use `dbUser.id` (internal cuid) as the FK key instead of the Clerk `userId` string. Previously every upsert was writing the wrong ID type, causing FK violations or silent duplicate rows. Removed dead `COURT_MANAGER` and `EVENT_MANAGER` branches (roles not in schema `Role` enum).
+- **`challenge.actions.ts`** — `sendChallenge` now resolves `dbUser.id` before writing `challengerId` to `MatchChallenge`. The old code stored the Clerk string directly against an internal-id FK column. `respondToChallenge` similarly resolves `dbUser.id` for the ownership check instead of comparing against `clerkId`.
+- **`score.actions.ts`** — Action now returns `ActionResult` instead of throwing raw `Error`. Rate-limit, not-found, and validation paths all return structured `{ success, error, code }` objects — no more unhandled 500s reaching the UI.
+- **`post.actions.ts`** — Rate-limit hit and auth failure paths now return `ActionResult` instead of throwing. `deletePost` also returns `ActionResult` consistently.
+
+### Fixed (Medium 🟡 — Consistency / Correctness)
+- **`validations.ts`** — `scoreSchema` set score cap raised from `max(7)` to `max(10)` to support padel super-tiebreaks (first to 10). `courtSchema` and `eventSchema` field names aligned with Prisma schema (`isIndoor` not `indoor`, `startTime`/`endTime` not `startsAt`/`endsAt`, removed `address/city/country/surface` not in `Court` model, `maxPlayers` not `capacity`).
+- **`ads.actions.ts` / `org.actions.ts` / `vendor.actions.ts`** — Migrated from `import { prisma } from '@/lib/prisma'` to `import { db } from '@/lib/db'`. Single Prisma client instance across all server code — no more risk of multiple clients in dev hot-reload.
+- **`ads/serve/route.ts` / `ads/track/route.ts`** — Same `@/lib/prisma` → `@/lib/db` migration.
+- **`getUserOrgs`** — No longer accepts a `userId` parameter; derives identity from `auth()` to be consistent with all other actions.
+
+---
+
 ## [0.7.2] - 2026-07-07
 
 ### Fixed (High Priority 🔴)

@@ -42,7 +42,12 @@ export async function sendChallenge(
 
   const parsed = result.data;
 
-  if (parsed.challengedId === userId)
+  // Resolve internal DB user to ensure FK integrity on MatchChallenge.challengerId
+  const dbUser = await db.user.findUnique({ where: { clerkId: userId }, select: { id: true } });
+  if (!dbUser)
+    return { success: false, error: "User not found", code: "NOT_FOUND" };
+
+  if (parsed.challengedId === dbUser.id)
     return {
       success: false,
       error: "Cannot challenge yourself",
@@ -51,7 +56,7 @@ export async function sendChallenge(
 
   await db.matchChallenge.create({
     data: {
-      challengerId: userId,
+      challengerId: dbUser.id,
       challengedId: parsed.challengedId,
       message: parsed.message ?? null,
     },
@@ -78,6 +83,11 @@ export async function respondToChallenge(
   if (!userId)
     return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
+  // Resolve internal id for ownership check
+  const dbUser = await db.user.findUnique({ where: { clerkId: userId }, select: { id: true } });
+  if (!dbUser)
+    return { success: false, error: "User not found", code: "NOT_FOUND" };
+
   const challenge = await db.matchChallenge.findUnique({
     where: { id: challengeId },
   });
@@ -85,7 +95,7 @@ export async function respondToChallenge(
   if (!challenge)
     return { success: false, error: "Challenge not found", code: "NOT_FOUND" };
 
-  if (challenge.challengedId !== userId)
+  if (challenge.challengedId !== dbUser.id)
     return { success: false, error: "Forbidden", code: "FORBIDDEN" };
 
   if (challenge.status !== "PENDING")

@@ -15,9 +15,15 @@ export const messageSchema = z.object({
   body: z.string().min(1).max(2000),
 });
 
+// Padel set scores: regular sets go to 6/7, super-tiebreak to 10
 export const scoreSchema = z.object({
   opponentId: z.string().optional(),
-  sets: z.array(z.object({ player: z.number().int().min(0).max(7), opponent: z.number().int().min(0).max(7) })).min(1).max(5),
+  sets: z.array(
+    z.object({
+      player: z.number().int().min(0).max(10),
+      opponent: z.number().int().min(0).max(10),
+    })
+  ).min(1).max(5),
   result: z.enum(["WIN", "LOSS", "DRAW"]),
   courtId: z.string().cuid().optional(),
   playedAt: z.string().datetime().optional(),
@@ -26,15 +32,9 @@ export const scoreSchema = z.object({
 export const courtSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
-  address: z.string().min(1),
-  city: z.string().min(1),
-  country: z.string().min(1),
-  lat: z.number().optional(),
-  lng: z.number().optional(),
-  imageUrl: z.string().url().optional(),
   pricePerHour: z.number().positive(),
-  surface: z.enum(["crystal", "artificial_grass", "concrete"]).optional(),
-  indoor: z.boolean().default(false),
+  isIndoor: z.boolean().default(false),
+  imageUrl: z.string().url().optional(),
 });
 
 export const eventSchema = z.object({
@@ -42,10 +42,9 @@ export const eventSchema = z.object({
   description: z.string().max(1000).optional(),
   imageUrl: z.string().url().optional(),
   location: z.string().min(1),
-  startsAt: z.string().datetime(),
-  endsAt: z.string().datetime(),
-  ticketPrice: z.number().min(0),
-  capacity: z.number().int().positive().optional(),
+  startTime: z.string().datetime(),
+  endTime: z.string().datetime(),
+  maxPlayers: z.number().int().positive().optional(),
 });
 
 export const settingsSchema = z.object({

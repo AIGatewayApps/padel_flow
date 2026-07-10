@@ -4,13 +4,14 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { scoreSchema } from "@/lib/validations";
 import { calcElo } from "@/lib/elo";
+import type { ActionResult } from "@/lib/types";
 
-export async function submitScore(formData: FormData) {
+export async function submitScore(formData: FormData): Promise<ActionResult> {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId) return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
   const setsRaw = formData.get("sets")?.toString();
-  const parsed = scoreSchema.parse({
+  const parseResult = scoreSchema.safeParse({
     opponentId: formData.get("opponentId") || undefined,
     sets: setsRaw ? JSON.parse(setsRaw) : [],
     result: formData.get("result"),
@@ -18,9 +19,16 @@ export async function submitScore(formData: FormData) {
     playedAt: formData.get("playedAt") || undefined,
   });
 
+  if (!parseResult.success)
+    return {
+      success: false,
+      error: parseResult.error.errors[0]?.message ?? "Invalid input",
+      code: "VALIDATION_ERROR",
+    };
+
+  const parsed = parseResult.data;
   const playedAt = parsed.playedAt ? new Date(parsed.playedAt) : new Date();
 
-  // Fetch player + opponent in parallel before the transaction
   const [player, opponent] = await Promise.all([
     db.user.findUnique({
       where: { clerkId: userId },
@@ -40,7 +48,7 @@ export async function submitScore(formData: FormData) {
       : null,
   ]);
 
-  if (!player) throw new Error("Player not found");
+  if (!player) return { success: false, error: "Player not found", code: "NOT_FOUND" };
 
   const gamesPlayed =
     (player.profile?.totalWins ?? 0) +
@@ -56,7 +64,6 @@ export async function submitScore(formData: FormData) {
   const newStreak =
     daysSinceLast === null || daysSinceLast > 1 ? 1 : player.streak + 1;
 
-  // Single atomic transaction — all writes succeed or all roll back
   await db.$transaction([
     db.score.create({
       data: { userId: player.id, ...parsed, playedAt },
@@ -83,4 +90,5 @@ export async function submitScore(formData: FormData) {
 
   revalidatePath("/scores");
   revalidatePath("/leaderboard");
+  return { success: true, data: undefined };
 }

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { db } from '@/lib/db'
 
 export async function POST(req: NextRequest) {
   const { adId, clicked, userId } = await req.json()
-  await prisma.adImpression.create({
+  await db.adImpression.create({
     data: { adId, clicked: clicked ?? false, userId: userId ?? null },
   })
   return NextResponse.json({ ok: true })
