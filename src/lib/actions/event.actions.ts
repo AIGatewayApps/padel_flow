@@ -5,35 +5,56 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireOrgRole } from "@/lib/permissions";
 import { eventSchema } from "@/lib/validations";
+import type { ActionResult } from "@/lib/types";
 
-export async function upsertEvent(orgId: string, eventId: string | null, formData: FormData) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+export async function upsertEvent(
+  orgId: string,
+  eventId: string | null,
+  formData: FormData
+): Promise<ActionResult> {
+  const { userId: clerkId } = await auth();
+  if (!clerkId) return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
-  // Only ORG_ADMIN members of this org (or SUPER_ADMIN) may manage events
-  await requireOrgRole(userId, orgId, ["ORG_ADMIN"]);
+  await requireOrgRole(clerkId, orgId, ["ORG_ADMIN"]);
 
+  // Field names aligned with eventSchema
   const raw = {
     title: formData.get("title"),
-    description: formData.get("description") || null,
+    description: formData.get("description") || undefined,
+    imageUrl: formData.get("imageUrl") || undefined,
     location: formData.get("location"),
     startsAt: formData.get("startsAt"),
     endsAt: formData.get("endsAt"),
-    ticketPrice: Number(formData.get("ticketPrice")),
-    capacity: formData.get("capacity") ? Number(formData.get("capacity")) : null,
+    ticketPrice: formData.get("ticketPrice") ? Number(formData.get("ticketPrice")) : undefined,
+    capacity: formData.get("capacity") ? Number(formData.get("capacity")) : undefined,
   };
-  const parsed = eventSchema.parse(raw);
+
+  const result = eventSchema.safeParse(raw);
+  if (!result.success)
+    return {
+      success: false,
+      error: result.error.errors[0]?.message ?? "Invalid input",
+      code: "VALIDATION_ERROR",
+    };
+
+  const parsed = result.data;
+  const startsAt = new Date(parsed.startsAt);
+  const endsAt = new Date(parsed.endsAt);
+
+  if (startsAt >= endsAt)
+    return { success: false, error: "Start time must be before end time", code: "VALIDATION_ERROR" };
 
   if (eventId) {
     const event = await db.event.findUnique({ where: { id: eventId } });
-    if (!event || event.orgId !== orgId) throw new Error("Forbidden");
+    if (!event || event.orgId !== orgId)
+      return { success: false, error: "Forbidden", code: "FORBIDDEN" };
     await db.event.update({
       where: { id: eventId },
-      data: { ...parsed, startsAt: new Date(parsed.startsAt), endsAt: new Date(parsed.endsAt) },
+      data: { ...parsed, startsAt, endsAt },
     });
   } else {
     await db.event.create({
-      data: { ...parsed, orgId, startsAt: new Date(parsed.startsAt), endsAt: new Date(parsed.endsAt) },
+      data: { ...parsed, orgId, startsAt, endsAt },
     });
   }
 

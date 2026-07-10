@@ -19,12 +19,21 @@ export const searchRatelimit = redis
     })
   : null;
 
-/** 10 requests per minute — for post / comment creation */
+/** 10 posts per minute per user — dedicated prefix, does not share bucket with comments */
 export const postRatelimit = redis
   ? new Ratelimit({
       redis,
       limiter: Ratelimit.slidingWindow(10, "60 s"),
       prefix: "pf:post",
+    })
+  : null;
+
+/** 20 comments per minute per user — separate bucket from posts */
+export const commentRatelimit = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(20, "60 s"),
+      prefix: "pf:comment",
     })
   : null;
 

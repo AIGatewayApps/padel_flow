@@ -3,6 +3,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import type { ActionResult } from "@/lib/types";
 
 const BaseSchema = z.object({
   city: z.string().optional(),
@@ -21,62 +22,93 @@ const CoachSchema = BaseSchema.extend({
   certifications: z.string().optional(),
 });
 
-export async function completeOnboarding(data: Record<string, string>, role: string) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+export async function completeOnboarding(
+  data: Record<string, string>,
+  role: string
+): Promise<ActionResult> {
+  const { userId: clerkId } = await auth();
+  if (!clerkId) return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
-  const client = await clerkClient();
-  const base = BaseSchema.parse(data);
+  const baseResult = BaseSchema.safeParse(data);
+  if (!baseResult.success)
+    return {
+      success: false,
+      error: baseResult.error.errors[0]?.message ?? "Invalid input",
+      code: "VALIDATION_ERROR",
+    };
 
-  // Resolve internal DB user — all profile FKs reference User.id, not clerkId
   const dbUser = await db.user.findUnique({
-    where: { clerkId: userId },
+    where: { clerkId },
     select: { id: true },
   });
-  if (!dbUser) throw new Error("User not found in database");
+  if (!dbUser) return { success: false, error: "User not found", code: "NOT_FOUND" };
+
+  const client = await clerkClient();
 
   await db.user.update({
     where: { id: dbUser.id },
     data: {
-      city: base.city || undefined,
-      country: base.country || undefined,
+      city: baseResult.data.city || undefined,
+      country: baseResult.data.country || undefined,
       onboarded: true,
     },
   });
 
-  await client.users.updateUser(userId, {
+  await client.users.updateUser(clerkId, {
     privateMetadata: { onboarded: true },
   });
 
   if (role === "PLAYER") {
-    const d = PlayerSchema.parse(data);
+    const r = PlayerSchema.safeParse(data);
+    if (!r.success)
+      return {
+        success: false,
+        error: r.error.errors[0]?.message ?? "Invalid player data",
+        code: "VALIDATION_ERROR",
+      };
     await db.playerProfile.upsert({
       where: { userId: dbUser.id },
-      create: { userId: dbUser.id, racket: d.racket ?? null, hand: d.hand ?? null, position: d.position ?? null },
-      update: { racket: d.racket ?? null, hand: d.hand ?? null, position: d.position ?? null },
+      create: {
+        userId: dbUser.id,
+        racket: r.data.racket ?? null,
+        hand: r.data.hand ?? null,
+        position: r.data.position ?? null,
+      },
+      update: {
+        racket: r.data.racket ?? null,
+        hand: r.data.hand ?? null,
+        position: r.data.position ?? null,
+      },
     });
   }
 
   if (role === "COACH") {
-    const d = CoachSchema.parse(data);
+    const r = CoachSchema.safeParse(data);
+    if (!r.success)
+      return {
+        success: false,
+        error: r.error.errors[0]?.message ?? "Invalid coach data",
+        code: "VALIDATION_ERROR",
+      };
     await db.coach.upsert({
       where: { userId: dbUser.id },
       create: {
         userId: dbUser.id,
-        bio: d.bio ?? null,
-        pricePerHour: d.pricePerHour,
-        certifications: d.certifications ?? null,
+        bio: r.data.bio ?? null,
+        pricePerHour: r.data.pricePerHour,
+        certifications: r.data.certifications ?? null,
         specialties: [],
         languages: [],
       },
       update: {
-        bio: d.bio ?? null,
-        pricePerHour: d.pricePerHour,
-        certifications: d.certifications ?? null,
+        bio: r.data.bio ?? null,
+        pricePerHour: r.data.pricePerHour,
+        certifications: r.data.certifications ?? null,
       },
     });
   }
 
   revalidatePath("/dashboard");
   revalidatePath("/onboarding");
+  return { success: true, data: undefined };
 }

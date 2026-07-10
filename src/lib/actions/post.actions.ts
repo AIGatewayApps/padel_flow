@@ -7,11 +7,11 @@ import { postSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 
 export async function createPost(formData: FormData): Promise<ActionResult> {
-  const { userId } = await auth();
-  if (!userId) return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
+  const { userId: clerkId } = await auth();
+  if (!clerkId) return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
   if (postRatelimit) {
-    const { success } = await postRatelimit.limit(userId);
+    const { success } = await postRatelimit.limit(clerkId);
     if (!success)
       return { success: false, error: "Too many posts. Please slow down.", code: "RATE_LIMITED" };
   }
@@ -20,7 +20,6 @@ export async function createPost(formData: FormData): Promise<ActionResult> {
     body: formData.get("body"),
     imageUrl: formData.get("imageUrl") || undefined,
   });
-
   if (!parseResult.success)
     return {
       success: false,
@@ -28,19 +27,31 @@ export async function createPost(formData: FormData): Promise<ActionResult> {
       code: "VALIDATION_ERROR",
     };
 
+  const dbUser = await db.user.findUnique({
+    where: { clerkId },
+    select: { id: true },
+  });
+  if (!dbUser) return { success: false, error: "User not found", code: "NOT_FOUND" };
+
   await db.post.create({
-    data: { authorId: userId, body: parseResult.data.body, imageUrl: parseResult.data.imageUrl },
+    data: { authorId: dbUser.id, body: parseResult.data.body, imageUrl: parseResult.data.imageUrl },
   });
   revalidatePath("/feed");
   return { success: true, data: undefined };
 }
 
 export async function deletePost(postId: string): Promise<ActionResult> {
-  const { userId } = await auth();
-  if (!userId) return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
+  const { userId: clerkId } = await auth();
+  if (!clerkId) return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
+
+  const dbUser = await db.user.findUnique({
+    where: { clerkId },
+    select: { id: true },
+  });
+  if (!dbUser) return { success: false, error: "User not found", code: "NOT_FOUND" };
 
   const post = await db.post.findUnique({ where: { id: postId }, select: { authorId: true } });
-  if (!post || post.authorId !== userId)
+  if (!post || post.authorId !== dbUser.id)
     return { success: false, error: "Forbidden", code: "FORBIDDEN" };
 
   await db.post.delete({ where: { id: postId } });
