@@ -2,7 +2,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { postRatelimit } from "@/lib/ratelimit";
+import { commentRatelimit } from "@/lib/ratelimit";
 import { z } from "zod";
 import type { ActionResult } from "@/lib/types";
 
@@ -19,8 +19,9 @@ export async function createComment(
   if (!clerkId)
     return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
-  if (postRatelimit) {
-    const { success } = await postRatelimit.limit(clerkId);
+  // Use commentRatelimit (pf:comment) — separate bucket from post ratelimit (pf:post)
+  if (commentRatelimit) {
+    const { success } = await commentRatelimit.limit(clerkId);
     if (!success)
       return {
         success: false,

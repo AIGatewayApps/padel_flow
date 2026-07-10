@@ -11,17 +11,19 @@ async function assertHireAccess(coachHireId: string, clerkId: string) {
     where: { id: coachHireId },
     include: { coach: { select: { userId: true } } },
   });
-  if (!hire) return { hire: null, error: "Not found" } as const;
+  if (!hire) return { hire: null, dbUser: null, error: "Not found" } as const;
 
   const dbUser = await db.user.findUnique({
     where: { clerkId },
     select: { id: true },
   });
-  if (!dbUser) return { hire: null, error: "User not found" } as const;
+  if (!dbUser) return { hire: null, dbUser: null, error: "User not found" } as const;
 
-  const isCoach = hire.coach.userId === clerkId;
+  // coach.userId is a FK to User.id — compare against dbUser.id (not clerkId)
+  const isCoach = hire.coach.userId === dbUser.id;
   const isStudent = hire.studentId === dbUser.id;
-  if (!isCoach && !isStudent) return { hire: null, error: "Forbidden" } as const;
+  if (!isCoach && !isStudent)
+    return { hire: null, dbUser: null, error: "Forbidden" } as const;
 
   return { hire, dbUser, error: null } as const;
 }
@@ -39,7 +41,6 @@ export async function createVideoSession(
 
   const { hire } = access;
 
-  // Prevent creating a room for a session that is already in the past
   const expiry = Math.floor(hire.scheduledAt.getTime() / 1000) + ROOM_DURATION_S;
   if (expiry < Math.floor(Date.now() / 1000))
     return { success: false, error: "Session has already ended", code: "GONE" };

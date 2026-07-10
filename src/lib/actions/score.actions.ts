@@ -7,11 +7,12 @@ import { calcElo } from "@/lib/elo";
 import type { ActionResult } from "@/lib/types";
 
 export async function submitScore(formData: FormData): Promise<ActionResult> {
-  const { userId } = await auth();
-  if (!userId) return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
+  const { userId: clerkId } = await auth();
+  if (!clerkId) return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
   const setsRaw = formData.get("sets")?.toString();
   const parseResult = scoreSchema.safeParse({
+    // opponentId is an internal User.id (cuid), NOT a clerkId
     opponentId: formData.get("opponentId") || undefined,
     sets: setsRaw ? JSON.parse(setsRaw) : [],
     result: formData.get("result"),
@@ -29,49 +30,48 @@ export async function submitScore(formData: FormData): Promise<ActionResult> {
   const parsed = parseResult.data;
   const playedAt = parsed.playedAt ? new Date(parsed.playedAt) : new Date();
 
-  const [player, opponent] = await Promise.all([
-    db.user.findUnique({
-      where: { clerkId: userId },
-      select: {
-        id: true,
-        eloRating: true,
-        lastPlayedAt: true,
-        streak: true,
-        profile: { select: { totalWins: true, totalLosses: true, totalDraws: true } },
-      },
-    }),
-    parsed.opponentId
-      ? db.user.findUnique({
-          where: { clerkId: parsed.opponentId },
-          select: { eloRating: true },
-        })
-      : null,
-  ]);
+  const dbUser = await db.user.findUnique({
+    where: { clerkId },
+    select: {
+      id: true,
+      eloRating: true,
+      lastPlayedAt: true,
+      streak: true,
+      profile: { select: { totalWins: true, totalLosses: true, totalDraws: true } },
+    },
+  });
+  if (!dbUser) return { success: false, error: "Player not found", code: "NOT_FOUND" };
 
-  if (!player) return { success: false, error: "Player not found", code: "NOT_FOUND" };
+  // opponentId is a User.id — look up by id directly
+  const opponent = parsed.opponentId
+    ? await db.user.findUnique({
+        where: { id: parsed.opponentId },
+        select: { eloRating: true },
+      })
+    : null;
 
   const gamesPlayed =
-    (player.profile?.totalWins ?? 0) +
-    (player.profile?.totalLosses ?? 0) +
-    (player.profile?.totalDraws ?? 0);
+    (dbUser.profile?.totalWins ?? 0) +
+    (dbUser.profile?.totalLosses ?? 0) +
+    (dbUser.profile?.totalDraws ?? 0);
   const opponentElo = opponent?.eloRating ?? 1200;
-  const newElo = calcElo(player.eloRating, opponentElo, parsed.result, gamesPlayed);
+  const newElo = calcElo(dbUser.eloRating, opponentElo, parsed.result, gamesPlayed);
 
   const today = new Date();
-  const daysSinceLast = player.lastPlayedAt
-    ? Math.floor((today.getTime() - player.lastPlayedAt.getTime()) / 86400000)
+  const daysSinceLast = dbUser.lastPlayedAt
+    ? Math.floor((today.getTime() - dbUser.lastPlayedAt.getTime()) / 86400000)
     : null;
   const newStreak =
-    daysSinceLast === null || daysSinceLast > 1 ? 1 : player.streak + 1;
+    daysSinceLast === null || daysSinceLast > 1 ? 1 : dbUser.streak + 1;
 
   await db.$transaction([
     db.score.create({
-      data: { userId: player.id, ...parsed, playedAt },
+      data: { userId: dbUser.id, ...parsed, playedAt },
     }),
     db.playerProfile.upsert({
-      where: { userId: player.id },
+      where: { userId: dbUser.id },
       create: {
-        userId: player.id,
+        userId: dbUser.id,
         totalWins: parsed.result === "WIN" ? 1 : 0,
         totalLosses: parsed.result === "LOSS" ? 1 : 0,
         totalDraws: parsed.result === "DRAW" ? 1 : 0,
@@ -83,7 +83,7 @@ export async function submitScore(formData: FormData): Promise<ActionResult> {
       },
     }),
     db.user.update({
-      where: { id: player.id },
+      where: { id: dbUser.id },
       data: { eloRating: newElo, lastPlayedAt: today, streak: newStreak },
     }),
   ]);

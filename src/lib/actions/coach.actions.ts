@@ -20,7 +20,15 @@ export async function updateCoachProfile(
   if (!clerkId)
     return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
-  const coach = await db.coach.findUnique({ where: { userId: clerkId } });
+  // Resolve internal DB id — Coach.userId is a FK to User.id, not clerkId
+  const dbUser = await db.user.findUnique({
+    where: { clerkId },
+    select: { id: true },
+  });
+  if (!dbUser)
+    return { success: false, error: "User not found", code: "NOT_FOUND" };
+
+  const coach = await db.coach.findUnique({ where: { userId: dbUser.id } });
   if (!coach)
     return { success: false, error: "No coach profile", code: "NOT_FOUND" };
 
@@ -39,7 +47,7 @@ export async function updateCoachProfile(
     };
 
   await db.coach.update({
-    where: { userId: clerkId },
+    where: { userId: dbUser.id },
     data: {
       bio: result.data.bio ?? null,
       pricePerHour: result.data.pricePerHour,
@@ -68,8 +76,17 @@ export async function upsertAvailability(
   if (!clerkId)
     return { success: false, error: "Unauthorized", code: "UNAUTHORIZED" };
 
+  // Resolve internal id — Coach.userId is FK to User.id
+  const dbUser = await db.user.findUnique({
+    where: { clerkId },
+    select: { id: true },
+  });
+  if (!dbUser)
+    return { success: false, error: "User not found", code: "NOT_FOUND" };
+
   const coach = await db.coach.findUnique({ where: { id: coachId } });
-  if (!coach || coach.userId !== clerkId)
+  // Ownership check: coach.userId must match internal dbUser.id
+  if (!coach || coach.userId !== dbUser.id)
     return { success: false, error: "Forbidden", code: "FORBIDDEN" };
 
   const result = AvailSchema.safeParse(slots);
